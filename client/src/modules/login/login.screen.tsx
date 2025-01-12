@@ -1,4 +1,5 @@
 import './style.css';
+import {login} from './login.service';
 const Login = () => {
   return (
     <div className="flex  justify-center w-full pt-28">
@@ -6,7 +7,7 @@ const Login = () => {
         <h1 className="flex text-2xl font-semibold text-center text-gray-800 mb-6">
           Login
         </h1>
-        <form id="loginForm">
+        <form id="loginForm" onSubmit={login}>
           <div className="mb-4">
             <label
               htmlFor="username"

@@ -1,8 +1,8 @@
 const {app, BrowserWindow, ipcMain} = require('electron');
 const path = require('path');
 
-const Store = require('./electron/store.js');
-const MessageStore = require('./electron/messageStore.js');
+const Store = require('./store.js');
+const MessageStore = require('./message-store.js');
 
 // for file upload
 const fs = require('fs');
