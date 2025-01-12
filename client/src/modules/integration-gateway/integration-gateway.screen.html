@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LimsPlus Connect</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link href="../../../output.css" rel="stylesheet" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #1e1e1e;
+        color: #ffffff; /* Set default text color to white */
+        margin: 0;
+      }
+      input,
+      select,
+      textarea {
+        background-color: #2b2b2b; /* Dark background */
+        color: #ffffff; /* White text */
+        border: 1px solid #444; /* Darker border */
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none; /* Remove default focus outline */
+        border-color: #5f9cf4; /* Add a focus border color */
+        box-shadow: 0 0 5px #5f9cf4; /* Glow effect on focus */
+      }
+
+      #messageModal {
+        display: none; /* Hidden by default */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+        z-index: 1000; /* Ensure it appears above other content */
+      }
+
+      #messageModal .modal-content {
+        width: 33%; /* Control the modal width */
+        max-width: 500px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* Add some shadow for better visibility */
+      }
+
+      .modal-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%; /* Make sure it spans the full screen height */
+      }
+
+      label {
+        color: #ffffff; /* Ensure all labels are white */
+      }
+    </style>
+  </head>
+  <body class="p-2 h-auto flex items-center justify-center">
+    <!-- <div class="absolute top-4 right-4">
+      <button
+        id="homeButton"
+        class="bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-600 transition"
+      >
+        <i class="fas fa-home"></i>
+      </button>
+    </div> -->
+    <div
+      class="bg-[#1e1e1e] shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col"
+    >
+      <div class="grid grid-cols-12 gap-6">
+        <div
+          class="col-span-12 md:col-span-2 bg-[#2b2b2b] p-6 border rounded-lg shadow-sm"
+        >
+          <div>
+            <div class="mb-4">
+              <label class="flex items-center space-x-2 text-sm font-medium">
+                <input
+                  type="radio"
+                  name="type"
+                  id="tcpip"
+                  checked
+                  class="border-gray-300 focus:ring-2 focus:ring-blue-500"
+                />
+                <span>TCP/IP</span>
+              </label>
+            </div>
+            <div class="mb-4">
+              <label class="flex items-center space-x-2 text-sm font-medium">
+                <input
+                  type="radio"
+                  name="type"
+                  id="serial"
+                  class="border-gray-300 focus:ring-2 focus:ring-blue-500"
+                />
+                <span>Serial</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="space-y-2 flex flex-col w-30">
+            <button
+              id="btn-lis1a"
+              class="w-30 text-sm px-4 bg-yellow-500 py-3 text-black rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition"
+            >
+              INSTRUMENT
+            </button>
+            <button
+              id="btn-manual"
+              class="w-30 text-sm px-4 py-3 bg-gray-500 text-gray-700 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 transition"
+            >
+              MANUAL
+            </button>
+          </div>
+
+          <!-- File Upload -->
+          <div class="mt-6">
+            <label for="logFileInput" class="block text-sm font-medium mb-2">
+              Upload Log:
+            </label>
+            <div class="relative">
+              <label
+                class="flex items-center justify-center w-30 border-2 border-dashed border-gray-300 hover:border-blue-800 rounded-md px-3 py-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                for="logFileInput"
+              >
+                <span>Choose File</span>
+              </label>
+              <input
+                type="file"
+                id="logFileInput"
+                accept=".txt"
+                class="hidden"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="col-span-12 md:col-span-9 bg-[#2b2b2b] p-6 border rounded-lg"
+        >
+          <div
+            class="grid grid-cols-2 md:grid-cols-4 gap-4 active"
+            id="tcpip-settings"
+          >
+            <div>
+              <label class="block text-sm font-medium mb-1">IP Address:</label>
+              <input
+                type="text"
+                id="ip"
+                value="127.0.0.1"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Port:</label>
+              <input
+                type="text"
+                id="tcpPort"
+                value="8080"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1"
+                >Company Code:</label
+              >
+              <select
+                id="companyCode"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option>Select</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Environment:</label>
+              <select
+                id="env"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option>Select</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1"
+                >Instrument Type:</label
+              >
+              <select
+                id="intrumentType"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option>Select</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-1"
+                >Instrument ID:</label
+              >
+              <input
+                type="text"
+                id="instId"
+                placeholder="Instrument ID"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div
+            class="settings grid grid-cols-12 gap-4 hidden"
+            id="serial-settings"
+          >
+            <div class="col-span-6 md:col-span-4">
+              <label for="serialPort" class="block text-sm font-medium"
+                >Port:</label
+              >
+              <select
+                id="serialPort"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="COM1">COM1</option>
+                <option value="COM2">COM2</option>
+                <option value="COM3">COM3</option>
+              </select>
+            </div>
+            <div class="col-span-6 md:col-span-4">
+              <label for="baudRate" class="block text-sm font-medium"
+                >Baud:</label
+              >
+              <select
+                id="baudRate"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="9600">9600</option>
+                <option value="14400">14400</option>
+                <option value="19200">19200</option>
+              </select>
+            </div>
+            <div class="col-span-6 md:col-span-4">
+              <label for="dataBits" class="block text-sm font-medium"
+                >Data Bits:</label
+              >
+              <select
+                id="dataBits"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="8">8</option>
+                <option value="7">7</option>
+              </select>
+            </div>
+            <div class="col-span-6 md:col-span-4">
+              <label for="parity" class="block text-sm font-medium"
+                >Parity:</label
+              >
+              <select
+                id="parity"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="None">None</option>
+                <option value="Even">Even</option>
+                <option value="Odd">Odd</option>
+              </select>
+            </div>
+            <div class="col-span-6 md:col-span-4">
+              <label for="stopBits" class="block text-sm font-medium"
+                >Stop Bits:</label
+              >
+              <select
+                id="stopBits"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
+            </div>
+            <div class="col-span-6 md:col-span-4">
+              <label for="flow" class="block text-sm font-medium">Flow:</label>
+              <select
+                id="flow"
+                class="w-full mt-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="None">None</option>
+                <option value="XON/XOFF">XON/XOFF</option>
+                <option value="RTS/CTS">RTS/CTS</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex mt-6 gap-2">
+            <div class="space-x-4">
+              <button
+                id="connectButton"
+                class="bg-blue-500 text-white px-6 py-2 text-sm rounded-md"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button id="uploadButton">Upload</button>
+      <div id="logs-container" class="container mx-auto mt-10 p-4">
+        <!-- Scrollable container -->
+        <div class="overflow-x-auto max-h-[600px] mb-4">
+          <table
+            class="table-auto w-full text-left border-collapse border border-gray-300 shadow-md"
+          >
+            <!-- Sticky header -->
+            <thead class="bg-blue-500 text-black sticky top-0">
+              <tr>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  IP Address
+                </th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">Port</th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  Company Code
+                </th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  Environment
+                </th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  Instrument Type
+                </th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  Instrument ID
+                </th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">Status</th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">Message</th>
+                <th class="px-4 py-2 w-1/6 border border-gray-300">
+                  Action Date
+                </th>
+              </tr>
+            </thead>
+
+            <tbody id="logsTableBody">
+              <!-- Rows will be dynamically inserted here -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Selected Row Details -->
+        <div id="selected-row-details" class="mt-4" style="display: none">
+          <label class="block text-gray-700 text-lg font-medium mb-2"
+            >Selected Received Value:</label
+          >
+          <div class="p-2 border border-gray-300 rounded-lg">
+            <p>
+              <span class="font-bold text-blue-600">Original Hex: </span>
+              <span
+                id="original-hex"
+                class="whitespace-pre-wrap break-words"
+              ></span>
+            </p>
+            <p>
+              <span class="font-bold text-green-600">ASTM Value: </span>
+              <span
+                id="astm-value"
+                class="whitespace-pre-wrap break-words"
+              ></span>
+            </p>
+            <table
+              id="parsed-table"
+              class="table-auto w-full text-left mt-4 border-collapse border border-gray-300"
+            >
+              <thead>
+                <tr>
+                  <th class="px-4 py-2 border border-gray-300">
+                    Result Column
+                  </th>
+                  <th class="px-4 py-2 border border-gray-300">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Parsed values will be dynamically inserted here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-content" class="tab-content">
+        <div id="lis1a-content" class="p-2" style="display: none">
+          <!-- <div class="flex items-center mb-4 gap-2">
+              <input type="radio" name="simulate" class="mr-2" />
+              <label>Simulate Instrument</label>
+              <input type="radio" name="simulate" class="ml-4 mr-2" />
+              <label>Simulate Host</label>
+              <input type="radio" name="frame" class="mr-2" />
+              <label>Use Fixed Frame Size</label>
+              <input
+                type="number"
+                value="240"
+                class="ml-2 p-1 border rounded w-16"
+              />
+              <input type="radio" name="frame" class="mr-2" />
+              <label>Use a Frame for each Record</label>
+            </div> -->
+        </div>
+
+        <!-- Manual content -->
+        <div id="manual-content" class="tab-pane" style="display: none">
+          <div class="flex mb-4">
+            <textarea
+              id="sentContent"
+              class="border p-2 mb-2 flex-grow h-[11rem]"
+              placeholder="Sent content"
+            ></textarea>
+          </div>
+          <div class="flex mb-2">
+            <textarea
+              id="receivedContent"
+              class="border p-2 flex-grow h-[11rem]"
+              placeholder="Received content"
+            ></textarea>
+          </div>
+          <div class="flex mb-4 flex-wrap">
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              NULL
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              SOH
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              STX
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              ETX
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              EOT
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              ENQ
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              ACK
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              BEL
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              BS
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              HT
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              LF
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              VT
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              FF
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              CR
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              SO
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              SI
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              DLE
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              DC1
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              DC2
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              DC3
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              DC4
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              NAK
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              SYN
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              ETB
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              CAN
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              EM
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              SUB
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              ESC
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              FS
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              GS
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              RS
+            </button>
+            <button
+              class="bg-gray-300 text-xs text-black px-4 py-2 rounded m-1"
+            >
+              US
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      id="messageModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center"
+    >
+      <div
+        class="bg-white text-black rounded-lg"
+        style="width: 80%; height: 80%; padding: 24px"
+      >
+        <h2 class="text-xl font-bold mb-4 text-center">
+          Data Received To Instrument
+        </h2>
+        <textarea
+          id="secondSpaceContent"
+          class="w-full border border-gray-300 rounded p-2"
+          placeholder="Received Data"
+          readonly
+          style="height: 80%"
+        ></textarea>
+        <div class="flex space-x-2 mt-4" style="justify-content: end">
+          <button
+            class="bg-gray-500 text-white px-4 py-2 rounded"
+            onclick="closeMessageModal()"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const {ipcRenderer} = require('electron');
+      const fs = require('fs');
+      const path = require('path');
+      const {baseURL} = require('../../../env.js');
+      const {fetchCompanyList} = require('./integration-gateway.service.js');
+      document.addEventListener('DOMContentLoaded', () => {
+        fetchCompanyList();
+      });
+      // display company list
+      ipcRenderer.invoke('read-companyList');
+      ipcRenderer.on('send-companyList', (event, companies) => {
+        const companyCode = document.getElementById('companyCode');
+        const env = document.getElementById('env');
+        companies.forEach((company) => {
+          const option = document.createElement('option');
+          const envOption = document.createElement('option');
+          option.value = company.code;
+          option.textContent = company.name;
+          company?.environment.forEach((envItem) => {
+            envOption.value = envItem;
+            envOption.textContent = envItem;
+            env.appendChild(envOption);
+          });
+          companyCode.appendChild(option);
+        });
+      });
+
+      // file upload to server
+      // const uploadButton = document.getElementById('uploadButton');
+      // uploadButton.addEventListener('click', () => {
+      //   // ipcRenderer.send('file:upload', {
+      //   //   file: '/Users/appasaheb4/Library/Application Support/limsplus-lite/user-preferences.json',
+      //   // });
+      //   ipcRenderer.send('file:upload', {
+      //     file: '/Users/appasaheb4/Library/Application Support/limsplus-lite/received-message.json',
+      //   });
+      // });
+
+      ipcRenderer.on('upload:complete', (event, message) => {
+        alert(message);
+      });
+
+      ipcRenderer.on('stored-received-message', (event, message) => {
+        ipcRenderer.send('file:upload', {
+          url: `${baseURL()}/communication/uploadFile`,
+          file: '/Users/appasaheb4/Library/Application Support/limsplus-lite/received-message.json',
+          ip: '',
+          tcpPort: '',
+          companyCode: '',
+          instrumentType: '',
+          environment: '',
+          instrumentId: '',
+        });
+      });
+
+      function sendDetails(tcpPort) {
+        const ip = document.getElementById('ip').value;
+        const serverFolderPath = path.join(__dirname, 'server');
+        const targetFilePath = path.join(serverFolderPath, `${ip}.txt`);
+        // Check if the file exists
+        if (fs.existsSync(targetFilePath)) {
+          // Read the content of the file
+          fs.readFile(targetFilePath, 'utf8', (err, data) => {
+            if (err) {
+              console.error('Error reading file:', err);
+              alert('Failed to read the file.');
+            } else {
+              alert(`File content of ${ip}.txt: \n${data}`);
+              console.log(`File content:\n${data}`);
+            }
+          });
+        } else {
+          alert(`No file found with the name ${ip}.txt in the server folder.`);
+          console.error('File not found:', targetFilePath);
+        }
+      }
+
+      function appendLog(message) {
+        const logTextarea = document.getElementById('secondSpaceContent');
+        logTextarea.value += message + '\n';
+        logTextarea.scrollTop = logTextarea.scrollHeight;
+      }
+
+      ipcRenderer.on('ws-connected', (event, message) => {
+        appendLog(message);
+        // Now start the TCP server after WebSocket connection
+        const ip = document.getElementById('ip').value;
+        const tcpPort = document.getElementById('tcpPort').value;
+        ipcRenderer.invoke('start-server', ip, tcpPort);
+        document.getElementById('connectButton').disabled = true;
+        document.getElementById('ip').disabled = true;
+        document.getElementById('companyCode').disabled = true;
+        document.getElementById('intrumentType').disabled = true;
+        document.getElementById('tcpPort').disabled = true;
+        document.getElementById('env').disabled = true;
+        document.getElementById('instId').disabled = true;
+        document.getElementById('disconnectButton').disabled = false;
+        document.getElementById('connectButton').innerText = 'Connected';
+        document.getElementById('connectButton').classList.add('bg-gray-500');
+        document.getElementById('disconnectButton').classList.add('bg-red-500');
+        document
+          .getElementById('disconnectButton')
+          .classList.remove('bg-gray-500');
+      });
+      ipcRenderer.on('ws-disconnected', (event, message) => {
+        appendLog(message);
+        document.getElementById('connectButton').disabled = false;
+        document.getElementById('ip').disabled = false;
+        document.getElementById('companyCode').disabled = false;
+        document.getElementById('intrumentType').disabled = false;
+        document.getElementById('tcpPort').disabled = false;
+        document.getElementById('env').disabled = false;
+        document.getElementById('instId').disabled = false;
+        document.getElementById('disconnectButton').disabled = true;
+        document.getElementById('connectButton').innerText = 'Connect';
+        document.getElementById('connectButton').classList.add('bg-blue-500');
+        document
+          .getElementById('connectButton')
+          .classList.remove('bg-gray-500');
+        document
+          .getElementById('disconnectButton')
+          .classList.remove('bg-red-500');
+        document
+          .getElementById('disconnectButton')
+          .classList.add('bg-gray-500');
+      });
+      ipcRenderer.on('ws-data', (event, data) => {
+        appendLog(data);
+      });
+      ipcRenderer.on('ws-error', (event, error) => {
+        appendLog('Error: ' + error);
+      });
+      ipcRenderer.on('server-message', (event, message) => {
+        appendLog(message);
+      });
+      function openMessageModal() {
+        const modal = document.getElementById('messageModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex'; // Set display to flex for centering
+        icon.classList.remove('fa-expand');
+        icon.classList.add('fa-compress');
+      }
+
+      function closeMessageModal() {
+        const modal = document.getElementById('messageModal');
+        modal.style.display = 'none'; // Hide the modal
+        modal.classList.add('hidden');
+        icon.classList.remove('fa-compress');
+        icon.classList.add('fa-expand');
+      }
+
+      document.getElementById('connectButton').addEventListener('click', () => {
+        const isTcpSelected = document.getElementById('tcpip').checked;
+        if (isTcpSelected && connectButton.innerText === 'Connect') {
+          ipcRenderer.invoke('connect-ws');
+          // Get form values
+          const ip = document.getElementById('ip').value;
+          const tcpPort = document.getElementById('tcpPort').value;
+          const companyCode = document.getElementById('companyCode').value;
+          const instrumentType = document.getElementById('intrumentType').value;
+          const environment = document.getElementById('env').value;
+          const instrumentId = document.getElementById('instId').value;
+          // when you got  EOT then call this fun.
+          ipcRenderer.invoke('receivedMessage', [
+            '\x05',
+            'h|\\^&|||XP-100^00-14^^^^B7935^BS649542||||||||E1394-97<CR><ETX>65<CR><LF>',
+            'p|1<CR><ETX>3F<CR><LF>',
+            'o|1||^^102132^M|^^^^WBC\\^^^^RBC\\^^^^HGB\\^^^^HCT\\^^^^MCV\\^^^^MCH\\^^^^MCHC\\^^^^PLT\\^^^^LYM%\\^^^^MXD%\\^^^^NEUT%\\^^^^LYM#\\^^^^MXD#\\^^^^NEUT#\\^^^^RDW-SD\\^^^^RDW-CV\\^^^^PDW\\^^^^MPV\\^^^^P-LCR\\^^^^PCT|||||||N||||||||||||||F<CR><ETX>CE<CR><LF>',
+            'r|1|^^^^WBC^1|  8.4|10*3/uL||W||||               ||20230311135610<CR><ETX>F5<CR><LF>',
+            'r|2|^^^^RBC^1| 4.86|10*6/uL||N||||               ||20230311135610<CR><ETX>02<CR><LF>',
+            'r|3|^^^^HGB^1| 13.7|g/dL||N||||               ||20230311135610<CR><ETX>8C<CR><LF>',
+            'r|4|^^^^HCT^1| 41.9|%||N||||               ||20230311135610<CR><ETX>7E<CR><LF>',
+            'r|5|^^^^MCV^1| 86.2|fL||N||||               ||20230311135610<CR><ETX>0E<CR><LF>',
+            'r|6|^^^^MCH^1| 28.2|pg||N||||               ||20230311135610<CR><ETX>23<CR><LF>',
+            'r|7|^^^^MCHC^1| 32.7|g/dL||N||||               ||20230311135610<CR><ETX>D7<CR><LF>',
+            'r|8|^^^^PLT^1|  213|10*3/uL||W||||               ||20230311135610<CR><ETX>0B<CR><LF>',
+            'r|9|^^^^LYM%^1| 33.1|%||W||||               ||20230311135610<CR><ETX>BA<CR><LF>',
+            'r|10|^^^^MXD%^1|  8.5|%||W||||               ||20230311135610<CR><ETX>D0<CR><LF>',
+            'r|11|^^^^NEUT%^1| 58.4|%||W||||               ||20230311135610<CR><ETX>39<CR><LF>',
+            'r|12|^^^^LYM#^1|  2.8|10*3/uL||W||||               ||20230311135610<CR><ETX>61<CR><LF>',
+            'r|13|^^^^MXD#^1|  0.7|10*3/uL||W||||               ||20230311135610<CR><ETX>4F<CR><LF>',
+            'r|14|^^^^NEUT#^1|  4.9|10*3/uL||W||||               ||20230311135610<CR><ETX>AA<CR><LF>',
+            'r|15|^^^^RDW-SD^1| 42.8|fL||N||||               ||20230311135610<CR><ETX>0A<CR><LF>',
+            'r|16|^^^^RDW-CV^1| 12.3|%||N||||               ||20230311135610<CR><ETX>79<CR><LF>',
+            'r|17|^^^^PDW^1| 12.4|fL||N||||               ||20230311135610<CR><ETX>41<CR><LF>',
+            'r|18|^^^^MPV^1| 10.7|fL||N||||               ||20230311135610<CR><ETX>4C<CR><LF>',
+            'r|19|^^^^P-LCR^1| 29.7|%||N||||               ||20230311135610<CR><ETX>36<CR><LF>',
+            'r|20|^^^^PCT^1| 0.23|%||W||||               ||20230311135610<CR><ETX>B4<CR><LF>',
+            'l|1|N<CR><ETX>03<CR><LF>',
+          ]);
+          // Validate form inputs
+          const missingFields = [];
+          if (!ip) {
+            missingFields.push('IP Address');
+          }
+          if (!tcpPort) {
+            missingFields.push('Port');
+          }
+          if (!companyCode) {
+            missingFields.push('Company Code');
+          }
+          if (!instrumentType) {
+            missingFields.push('Instrument Type');
+          }
+          if (!environment) {
+            missingFields.push('Environment');
+          }
+          if (!instrumentId) {
+            missingFields.push('Instrument ID');
+          }
+
+          if (missingFields.length > 0) {
+            alert(
+              `Please fill out the following fields:\n- ${missingFields.join(
+                '\n- '
+              )}`
+            );
+            return false;
+          }
+
+          // Add a new row to the table
+          const tableBody = document.getElementById('logsTableBody');
+          const newRow = document.createElement('tr');
+          // Get the current time
+          const now = new Date();
+          const currentTime = now.toLocaleTimeString(); // Format: HH:MM:SS AM/PM
+
+          newRow.innerHTML = `
+            <td class="px-4 py-2 border border-gray-300 text-white">${ip}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">${tcpPort}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">${companyCode}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">${environment}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">${instrumentType}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">${instrumentId}</td>
+            <td class="px-4 py-2 border border-gray-300 text-white">
+              Progress
+            </td>
+                  <td class="px-4 py-2 border border-gray-300 text-white text-center">
+  <i
+    class="fas fa-expand text-blue-500 cursor-pointer"
+    id="toggleModalIcon"
+    onclick="openMessageModal()"
+  ></i>
+</td>
+        <td class="px-4 py-2 border border-gray-300 text-white text-center">
+          ${currentTime}
+        </td>
+   `;
+
+          tableBody.appendChild(newRow);
+          connectButton.innerText = 'Disconnect';
+          connectButton.classList.add('bg-red-500'); // Change button color for Disconnect
+          connectButton.classList.remove('bg-blue-500');
+        } else {
+          connectButton.innerText = 'Connect';
+          connectButton.classList.add('bg-blue-500'); // Change back to Connect color
+          connectButton.classList.remove('bg-red-500');
+        }
+      });
+      document
+        .getElementById('disconnectButton')
+        .addEventListener('click', () => {
+          const ip = document.getElementById('ip').value;
+          const tcpPort = document.getElementById('tcpPort').value;
+          ipcRenderer.invoke('disconnect-ws', ip, tcpPort);
+        });
+
+      document
+        .getElementById('btn-lis1a')
+        .addEventListener('click', function () {
+          document.getElementById('lis1a-content').style.display = 'block';
+          document.getElementById('manual-content').style.display = 'none';
+          document
+            .getElementById('btn-manual')
+            .classList.remove('bg-red-500', 'text-white');
+          document
+            .getElementById('btn-manual')
+            .classList.add('bg-gray-200', 'text-white');
+          document
+            .getElementById('btn-lis1a')
+            .classList.add('bg-yellow-500', 'text-white');
+          document
+            .getElementById('btn-lis1a')
+            .classList.remove('bg-gray-200', 'text-white');
+        });
+      document
+        .getElementById('btn-manual')
+        .addEventListener('click', function () {
+          document.getElementById('lis1a-content').style.display = 'none';
+          document.getElementById('manual-content').style.display = 'block';
+          document
+            .getElementById('btn-lis1a')
+            .classList.remove('bg-yellow-500', 'text-white');
+          document
+            .getElementById('btn-lis1a')
+            .classList.add('bg-gray-200', 'text-white');
+          document
+            .getElementById('btn-manual')
+            .classList.add('bg-red-500', 'text-white');
+          document
+            .getElementById('btn-manual')
+            .classList.remove('bg-gray-200', 'text-white');
+        });
+
+      document.getElementById('tcpip').addEventListener('change', function () {
+        const tcpipSettings = document.getElementById('tcpip-settings');
+        const serialSettings = document.getElementById('serial-settings');
+        tcpipSettings.classList.add('flex');
+        tcpipSettings.classList.remove('hidden');
+        serialSettings.classList.add('hidden');
+        serialSettings.classList.remove('flex');
+      });
+      document.getElementById('serial').addEventListener('change', function () {
+        const tcpipSettings = document.getElementById('tcpip-settings');
+        const serialSettings = document.getElementById('serial-settings');
+        serialSettings.classList.add('flex');
+        serialSettings.classList.remove('hidden');
+        tcpipSettings.classList.add('hidden');
+        tcpipSettings.classList.remove('flex');
+      });
+      document.getElementById('btn-lis1a').click();
+    </script>
+  </body>
+</html>
