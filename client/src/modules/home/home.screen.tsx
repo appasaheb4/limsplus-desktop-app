@@ -1,4 +1,8 @@
+import './style.css';
+import {useNavigate} from 'react-router-dom';
+
 const Home = () => {
+  const navigate = useNavigate();
   return (
     <div className="bg-gradient-to-r from-purple-600 to-blue-500 min-h-screen">
       <div className="flex header justify-between w-full">
@@ -15,7 +19,14 @@ const Home = () => {
         <div className="column workspaces">
           <div className="title">Workspaces</div>
           <div className="section">Global</div>
-          <button className="item">Integration Gateway</button>
+          <button
+            className="item"
+            onClick={() => {
+              navigate('/integration-gateway');
+            }}
+          >
+            Integration Gateway
+          </button>
           <button className="item">LimsPlus Lite</button>
           <button className="item">Backup/Restore</button>
         </div>

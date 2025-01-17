@@ -1,6 +1,10 @@
 import './style.css';
 import {login} from './login.service';
+import {useNavigate} from 'react-router-dom';
+const {ipcRenderer} = window.require('electron');
+
 const Login = () => {
+  const navigate = useNavigate();
   return (
     <div className="flex  justify-center w-full pt-28">
       <div className="flex flex-col bg-white p-8  rounded-lg shadow-lg items-center ">
@@ -42,6 +46,9 @@ const Login = () => {
           <button
             type="submit"
             className="w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium py-2 rounded-lg hover:from-purple-700 hover:to-blue-600 transition-all duration-300"
+            onClick={() => {
+              navigate('/dashboard');
+            }}
           >
             Login
           </button>
