@@ -1,9 +1,9 @@
 const IntegrationGateway = () => {
   return (
-    <div className="p-2 h-auto flex items-center justify-center">
-      <div className="bg-[#1e1e1e] shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col">
+    <div className="flex p-2 w-full h-auto  items-center justify-center">
+      <div className="shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col">
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 md:col-span-2 bg-[#2b2b2b] p-6 border rounded-lg shadow-sm">
+          <div className="col-span-2 p-6 border rounded-lg shadow-sm">
             <div>
               <div className="mb-4">
                 <label className="flex items-center space-x-2 text-sm font-medium">
@@ -69,7 +69,7 @@ const IntegrationGateway = () => {
             </div>
           </div>
 
-          <div className="col-span-12 md:col-span-9 bg-[#2b2b2b] p-6 border rounded-lg">
+          <div className="col-span-10 p-6 border rounded-lg shadow-sm">
             <div
               className="grid grid-cols-2 md:grid-cols-4 gap-4 active"
               id="tcpip-settings"
@@ -238,7 +238,7 @@ const IntegrationGateway = () => {
             </div>
           </div>
         </div>
-        <button id="uploadButton">Upload</button>
+
         <div id="logs-container" className="container mx-auto mt-10 p-4">
           <div className="overflow-x-auto max-h-[600px] mb-4">
             <table className="table-auto w-full text-left border-collapse border border-gray-300 shadow-md">

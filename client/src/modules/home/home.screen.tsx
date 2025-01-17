@@ -1,10 +1,22 @@
+import {useEffect} from 'react';
 import './style.css';
 import {useNavigate} from 'react-router-dom';
+const {ipcRenderer} = window.require('electron');
 
 const Home = () => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    ipcRenderer.invoke('read-user');
+    ipcRenderer.on('send-user', (event, user) => {
+      const userIdElement = document.getElementById('userId');
+      if (userIdElement) {
+        userIdElement.innerText = `Welcome ${user.userId}`;
+      }
+    });
+  }, []);
   return (
-    <div className="bg-gradient-to-r from-purple-600 to-blue-500 min-h-screen">
+    <div className="flex flex-col w-full bg-gradient-to-r from-purple-600 to-blue-500 min-h-screen">
       <div className="flex header justify-between w-full">
         <div className="flex">
           <span className="active">Origin</span>

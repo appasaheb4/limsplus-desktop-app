@@ -65,12 +65,12 @@ function createWindow() {
   // } catch (error) {
   //   console.log({error});
   // }
-
+  // mainWindow.webContents.openDevTools();
   if (!isDev) {
     mainWindow.loadURL(`file://${__dirname}/../index.html`);
   } else {
     mainWindow.loadURL('http://localhost:3000/index.html');
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
     // Hot Reloading on 'node_modules/.bin/electronPath'
     require('electron-reload')(__dirname, {
       electron: path.join(
