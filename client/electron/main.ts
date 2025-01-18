@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain} from 'electron';
+import {app, BrowserWindow, ipcMain, screen} from 'electron';
 import * as path from 'path';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
@@ -38,9 +38,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
     height: 768,
-    minWidth: 1024,
-    minHeight: 768,
-    frame: true,
+    // frame: true,
     resizable: false,
     icon: path.join(__dirname, '../assets/icon.ico'),
     webPreferences: {
@@ -85,6 +83,7 @@ app.whenReady().then(() => {
 ipcMain.on('navigate-to-integration-gateway', (event, route) => {
   childWindows = new BrowserWindow({
     parent: mainWindow,
+    alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true,
@@ -99,6 +98,21 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     childWindows.loadFile(path.join(__dirname, '../index.html'), {
       hash: route,
     });
+  }
+});
+
+ipcMain.on('navigate-to-iframe-screen', (event, url) => {
+  childWindows = new BrowserWindow({
+    parent: mainWindow,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  childWindows.maximize();
+  if (isDev) {
+    childWindows.loadURL(url);
   }
 });
 

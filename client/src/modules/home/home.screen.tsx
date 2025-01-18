@@ -1,8 +1,13 @@
 import {useEffect} from 'react';
+import {observer} from 'mobx-react';
+import {fetchEnvironment} from '../integration-gateway/services';
+import {useStores} from '../../stores';
 import './style.css';
+
 const {ipcRenderer} = window.require('electron');
 
-const Home = () => {
+const Home = observer(() => {
+  const {integrationGatewayStore} = useStores();
   useEffect(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', (event, user) => {
@@ -10,8 +15,10 @@ const Home = () => {
       if (userIdElement) {
         userIdElement.innerText = `Welcome ${user.userId}`;
       }
+      fetchEnvironment({code: user.companyCode});
     });
   }, []);
+
   return (
     <div className="flex flex-col w-full bg-gradient-to-r from-purple-600 to-blue-500 min-h-screen">
       <div className="flex header justify-between w-full">
@@ -31,8 +38,6 @@ const Home = () => {
           <button
             className="item"
             onClick={() => {
-              // navigate('/integration-gateway');
-              // ipcRenderer.send('navigate-to-integration-gateway');
               ipcRenderer.send(
                 'navigate-to-integration-gateway',
                 '/integration-gateway'
@@ -41,7 +46,18 @@ const Home = () => {
           >
             Integration Gateway
           </button>
-          <button className="item">LimsPlus Lite</button>
+          <button
+            className="item"
+            onClick={() => {
+              ipcRenderer.send(
+                'navigate-to-iframe-screen',
+                integrationGatewayStore.integrationGateway.companyDetails
+                  ?.webPortal
+              );
+            }}
+          >
+            LimsPlus Lite
+          </button>
           <button className="item">Backup/Restore</button>
         </div>
         <div className="column reports">
@@ -51,6 +67,6 @@ const Home = () => {
       </div>
     </div>
   );
-};
+});
 
 export default Home;

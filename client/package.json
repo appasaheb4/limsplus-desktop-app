@@ -1,5 +1,5 @@
 {
-  "name": "limsplus-lite",
+  "name": "limsplus-connect",
   "version": "1.0.0",
   "description": "LimsPlus Connect",
   "homepage": ".",
@@ -29,6 +29,8 @@
     "electron-reload": "^1.5.0",
     "form-data": "^4.0.1",
     "fs": "^0.0.1-security",
+    "mobx": "^6.13.5",
+    "mobx-react": "^9.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.1.2",

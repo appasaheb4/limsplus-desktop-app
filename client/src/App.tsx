@@ -3,7 +3,11 @@ import Login from './modules/login/login.screen';
 import Home from './modules/home/home.screen';
 import IntegrationGateway from './modules/integration-gateway/integrationGateway.screen';
 
+import {stores} from './stores';
+
 function App() {
+  console.log({isLoading: stores.loading});
+
   return (
     <div className="flex">
       <Router>

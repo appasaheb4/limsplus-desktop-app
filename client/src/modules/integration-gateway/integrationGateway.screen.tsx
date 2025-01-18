@@ -1,9 +1,12 @@
 import {useEffect, useState} from 'react';
-import {baseURL} from '../../env.js';
+import {observer} from 'mobx-react';
+import {useStores} from '../../stores';
+import {fetchEnvironment} from './services';
+import {fetchInstrumentDetails} from './services';
 const {ipcRenderer} = window.require('electron');
 
-const IntegrationGateway = () => {
-  const [envList, setEnvList] = useState([]);
+const IntegrationGateway = observer(() => {
+  const {integrationGatewayStore} = useStores();
   const [inputs, setInputs] = useState({
     ip: '127.0.0.1',
     port: '8080',
@@ -13,28 +16,6 @@ const IntegrationGateway = () => {
     instrumentId: '',
   });
 
-  const fetchEnv = (payload: any) => {
-    fetch(`${baseURL()}/company/companyFindByFields`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...payload,
-      }),
-    })
-      .then((response) => response.json())
-      .then((response) => {
-        console.log({response});
-        if (response?.success) {
-          setEnvList(response?.companyList[0]?.environment);
-        }
-      })
-      .catch((error) => {
-        console.log({error});
-      });
-  };
-
   function removeOptions(selectElement: any) {
     var i,
       L = selectElement.options.length - 1;
@@ -43,38 +24,6 @@ const IntegrationGateway = () => {
     }
   }
 
-  const fetchInstrumentDetails = (payload: any) => {
-    fetch(`${baseURL()}/communication/instrumentTypeList`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...payload,
-      }),
-    })
-      .then((response) => response.json())
-      .then((response) => {
-        const intrumentType = document.getElementById('intrumentType');
-        removeOptions(document.getElementById('intrumentType'));
-        if (response?.success) {
-          response?.instrumentTypeList.forEach((instrument: any) => {
-            const option = document.createElement('option');
-            option.value = instrument;
-            option.textContent = instrument;
-            if (intrumentType) {
-              intrumentType.appendChild(option);
-            }
-          });
-        } else {
-          alert(response?.message);
-        }
-      })
-      .catch((error) => {
-        console.log({error});
-      });
-  };
-
   useEffect(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', (event, user) => {
@@ -82,7 +31,7 @@ const IntegrationGateway = () => {
         ...inputs,
         companyCode: user.companyCode,
       });
-      fetchEnv({code: user.companyCode});
+      fetchEnvironment({code: user.companyCode});
     });
   }, []);
 
@@ -220,6 +169,7 @@ const IntegrationGateway = () => {
                       ...inputs,
                       environment,
                     });
+                    removeOptions(document.getElementById('intrumentType'));
                     fetchInstrumentDetails({
                       companyCode: inputs?.companyCode,
                       environment,
@@ -227,11 +177,13 @@ const IntegrationGateway = () => {
                   }}
                 >
                   <option>Select</option>
-                  {envList?.map((item, index) => (
-                    <option key={index} value={item}>
-                      {item}
-                    </option>
-                  ))}
+                  {integrationGatewayStore.integrationGateway.environment?.map(
+                    (item, index) => (
+                      <option key={index} value={item}>
+                        {item}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
               <div>
@@ -251,6 +203,13 @@ const IntegrationGateway = () => {
                   }}
                 >
                   <option>Select</option>
+                  {integrationGatewayStore.integrationGateway.instrumentTypeList?.map(
+                    (item, index) => (
+                      <option key={index} value={item}>
+                        {item}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
 
@@ -327,6 +286,6 @@ const IntegrationGateway = () => {
       </div>
     </div>
   );
-};
+});
 
 export default IntegrationGateway;
