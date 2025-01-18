@@ -57,30 +57,11 @@ function createWindow() {
   }
 
   if (isDev) {
+    mainWindow.webContents.openDevTools();
     mainWindow.loadURL('http://localhost:3000');
   } else {
     mainWindow.loadFile(path.join(__dirname, '../index.html'));
   }
-
-  // if (!isDev) {
-  //   mainWindow.loadURL(`file://${__dirname}/../index.html`);
-  // } else {
-  //   mainWindow.loadURL('http://localhost:3000/index.html');
-  //   // mainWindow.webContents.openDevTools();
-  //   // Hot Reloading on 'node_modules/.bin/electronPath'
-  //   require('electron-reload')(__dirname, {
-  //     electron: path.join(
-  //       __dirname,
-  //       '..',
-  //       '..',
-  //       'node_modules',
-  //       '.bin',
-  //       'electron' + (process.platform === 'win32' ? '.cmd' : '')
-  //     ),
-  //     forceHardReset: true,
-  //     hardResetMethod: 'exit',
-  //   });
-  // }
 }
 
 app.whenReady().then(() => {
@@ -89,11 +70,11 @@ app.whenReady().then(() => {
     .then((name) => console.log(`Added Extension:  ${name}`))
     .catch((err) => console.log('An error occurred: ', err));
   createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+  // app.on('activate', () => {
+  //   if (BrowserWindow.getAllWindows().length === 0) {
+  //     createWindow();
+  //   }
+  // });
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
       app.quit();
@@ -113,8 +94,6 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
   childWindows.maximize();
   if (isDev) {
     childWindows.webContents.openDevTools();
-  }
-  if (isDev) {
     childWindows.loadURL(`http://localhost:3000/#${route}`);
   } else {
     childWindows.loadFile(path.join(__dirname, '../index.html'), {

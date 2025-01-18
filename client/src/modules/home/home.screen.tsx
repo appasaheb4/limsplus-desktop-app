@@ -1,11 +1,8 @@
 import {useEffect} from 'react';
 import './style.css';
-import {useNavigate} from 'react-router-dom';
 const {ipcRenderer} = window.require('electron');
 
 const Home = () => {
-  const navigate = useNavigate();
-
   useEffect(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', (event, user) => {
