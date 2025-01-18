@@ -1,6 +1,7 @@
 import {useNavigate} from 'react-router-dom';
 import {useEffect, useState} from 'react';
 import {baseURL} from '../../env.js';
+import Background from '../../assets/images/bg-login.png';
 const {ipcRenderer} = window.require('electron');
 
 const Login = () => {
@@ -9,6 +10,9 @@ const Login = () => {
   const [inputs, setInputs] = useState({});
 
   useEffect(() => {
+    ipcRenderer.on('user', (event, user) => {
+      if (user.userId) navigate('/dashboard');
+    });
     fetch(`${baseURL()}/company/list`, {
       method: 'GET',
       headers: {
@@ -24,10 +28,23 @@ const Login = () => {
       .catch((error) => {
         console.log({error});
       });
+    return () => {
+      ipcRenderer.removeAllListeners('user');
+    };
   }, []);
   return (
-    <div className="flex  justify-center w-full pt-28">
-      <div className="flex flex-col bg-[#1e1e1e] p-6 px-20 text-white  rounded-lg shadow-lg items-center ">
+    <div
+      className="flex justify-center w-full"
+      style={{
+        backgroundImage: 'url(' + Background + ')',
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+        backgroundRepeat: 'no-repeat',
+        width: '100vw',
+        height: '100vh',
+      }}
+    >
+      <div className="flex flex-col bg-white p-6 px-20 text-black  rounded-lg shadow-lg items-center h-fit mt-40">
         <h1 className="flex text-2xl font-semibold text-center  mb-6">Login</h1>
         <div className="mb-4">
           <label htmlFor="company" className="block text-sm font-medium  mb-2">

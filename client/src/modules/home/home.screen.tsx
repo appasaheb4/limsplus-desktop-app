@@ -34,7 +34,12 @@ const Home = () => {
           <button
             className="item"
             onClick={() => {
-              navigate('/integration-gateway');
+              // navigate('/integration-gateway');
+              // ipcRenderer.send('navigate-to-integration-gateway');
+              ipcRenderer.send(
+                'navigate-to-integration-gateway',
+                '/integration-gateway'
+              );
             }}
           >
             Integration Gateway

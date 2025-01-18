@@ -49,42 +49,38 @@ function createWindow() {
       contextIsolation: false,
     },
   });
-
-  //mainWindow.setResizable(false);
-  // try {
-  //   const user = store.get('user');
-  //   if (user?.userId) {
-  //     mainWindow.loadFile(
-  //       path.join(__dirname, 'src/modules/home', 'home.screen.html')
-  //     );
-  //   } else {
-  //     mainWindow.loadFile(
-  //       path.join(__dirname, 'src/modules/login', 'login.screen.html')
-  //     );
-  //   }
-  // } catch (error) {
-  //   console.log({error});
-  // }
-  // mainWindow.webContents.openDevTools();
-  if (!isDev) {
-    mainWindow.loadURL(`file://${__dirname}/../index.html`);
-  } else {
-    mainWindow.loadURL('http://localhost:3000/index.html');
-    // mainWindow.webContents.openDevTools();
-    // Hot Reloading on 'node_modules/.bin/electronPath'
-    require('electron-reload')(__dirname, {
-      electron: path.join(
-        __dirname,
-        '..',
-        '..',
-        'node_modules',
-        '.bin',
-        'electron' + (process.platform === 'win32' ? '.cmd' : '')
-      ),
-      forceHardReset: true,
-      hardResetMethod: 'exit',
+  const user = store.get('user');
+  if (user?.userId) {
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.send('user', user);
     });
   }
+
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:3000');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../index.html'));
+  }
+
+  // if (!isDev) {
+  //   mainWindow.loadURL(`file://${__dirname}/../index.html`);
+  // } else {
+  //   mainWindow.loadURL('http://localhost:3000/index.html');
+  //   // mainWindow.webContents.openDevTools();
+  //   // Hot Reloading on 'node_modules/.bin/electronPath'
+  //   require('electron-reload')(__dirname, {
+  //     electron: path.join(
+  //       __dirname,
+  //       '..',
+  //       '..',
+  //       'node_modules',
+  //       '.bin',
+  //       'electron' + (process.platform === 'win32' ? '.cmd' : '')
+  //     ),
+  //     forceHardReset: true,
+  //     hardResetMethod: 'exit',
+  //   });
+  // }
 }
 
 app.whenReady().then(() => {
@@ -105,13 +101,7 @@ app.whenReady().then(() => {
   });
 });
 
-ipcMain.on('navigate-to-home-screen', (event) => {
-  mainWindow.loadFile(
-    path.join(__dirname, 'src/modules/home', 'home.screen.html')
-  );
-});
-
-ipcMain.on('navigate-to-second-screen', (event) => {
+ipcMain.on('navigate-to-integration-gateway', (event, route) => {
   childWindows = new BrowserWindow({
     parent: mainWindow,
     webPreferences: {
@@ -124,13 +114,13 @@ ipcMain.on('navigate-to-second-screen', (event) => {
   if (isDev) {
     childWindows.webContents.openDevTools();
   }
-  childWindows.loadFile(
-    path.join(
-      __dirname,
-      'src/modules/integration-gateway',
-      'integration-gateway.screen.html'
-    )
-  );
+  if (isDev) {
+    childWindows.loadURL(`http://localhost:3000/#${route}`);
+  } else {
+    childWindows.loadFile(path.join(__dirname, '../index.html'), {
+      hash: route,
+    });
+  }
 });
 
 ipcMain.handle('accessToken', async (sender, payload) => {
