@@ -1,6 +1,6 @@
 {
   "name": "limsplus-connect",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "LimsPlus Connect",
   "homepage": ".",
   "main": "build/electron/main.js",
@@ -44,6 +44,9 @@
   "build": {
     "appId": "com.limsplus.connect",
     "productName": "LimsPlus Connect",
+    "publisherName": "LimsPlus",
+    "version": "1.0.1",
+    "description": "LimsPlus Connect Desktop Application",
     "extends": null,
     "files": [
       "build/**/*",
@@ -55,7 +58,9 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}.exe"
+      "artifactName": "${productName}.exe",
+      "legalTrademarks": "(c) 2024 https://www.limsplus.co.in",
+      "publisherName": "LimsPlus"
     },
     "nsis": {
       "oneClick": false,
