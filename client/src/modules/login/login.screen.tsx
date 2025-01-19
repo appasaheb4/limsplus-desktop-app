@@ -1,37 +1,24 @@
 import {useNavigate} from 'react-router-dom';
-import {useEffect, useState} from 'react';
-import {baseURL} from '../../env.js';
+import {observer} from 'mobx-react';
+import {useEffect} from 'react';
 import Background from '../../assets/images/bg-login.png';
+import {useStores} from '../../stores';
 const {ipcRenderer} = window.require('electron');
 
-const Login = () => {
+const Login = observer(() => {
+  const {loginStore} = useStores();
   const navigate = useNavigate();
-  const [companyList, setCompanyList] = useState([]);
-  const [inputs, setInputs] = useState({});
 
   useEffect(() => {
     ipcRenderer.on('user', (event, user) => {
       if (user.userId) navigate('/dashboard');
     });
-    fetch(`${baseURL()}/company/list`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application',
-      },
-    })
-      .then((response) => response.json())
-      .then((response) => {
-        if (response?.success) {
-          setCompanyList(response?.companyList);
-        }
-      })
-      .catch((error) => {
-        console.log({error});
-      });
+    loginStore.loginService.getCompanyList();
     return () => {
       ipcRenderer.removeAllListeners('user');
     };
   }, []);
+
   return (
     <div
       className="flex justify-center w-full"
@@ -44,7 +31,7 @@ const Login = () => {
         height: '100vh',
       }}
     >
-      <div className="flex flex-col bg-white p-6 px-20 text-black  rounded-lg shadow-lg items-center h-fit mt-40">
+      <div className="flex flex-col bg-white p-6 px-20 text-black  rounded-lg shadow-lg items-center h-fit mt-28">
         <h1 className="flex text-2xl font-semibold text-center  mb-6">Login</h1>
         <div className="mb-4">
           <label htmlFor="company" className="block text-sm font-medium  mb-2">
@@ -52,17 +39,17 @@ const Login = () => {
           </label>
           <select
             id="companyCode"
-            className="w-full px-4 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-60 px-2 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             onChange={(e) => {
               const companyCode = e.target.value;
-              setInputs({
-                ...inputs,
+              loginStore.updateLogin({
+                ...loginStore.login,
                 companyCode,
               });
             }}
           >
             <option>Select</option>
-            {companyList?.map((item: any) => (
+            {loginStore.companyList?.map((item: any) => (
               <option value={item.code}>{item.name}</option>
             ))}
           </select>
@@ -75,16 +62,37 @@ const Login = () => {
             type="text"
             id="username"
             placeholder="Username"
-            className="w-full px-4 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-60 px-2 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             required
             onChange={(e) => {
               const username = e.target.value;
-              setInputs({
-                ...inputs,
+              loginStore.updateLogin({
+                ...loginStore.login,
                 username,
               });
             }}
           />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="company" className="block text-sm font-medium  mb-2">
+            Lab
+          </label>
+          <select
+            id="lab"
+            className="w-60 px-2 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            onChange={(e) => {
+              const lab = e.target.value;
+              loginStore.updateLogin({
+                ...loginStore.login,
+                lab,
+              });
+            }}
+          >
+            <option>Select</option>
+            {loginStore.companyList?.map((item: any) => (
+              <option value={item.code}>{item.name}</option>
+            ))}
+          </select>
         </div>
         <div className="mb-6">
           <label htmlFor="password" className="block text-sm font-medium  mb-2">
@@ -94,12 +102,12 @@ const Login = () => {
             type="password"
             id="password"
             placeholder="Password"
-            className="w-full px-4 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-60 px-2 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             required
             onChange={(e) => {
               const password = e.target.value;
-              setInputs({
-                ...inputs,
+              loginStore.updateLogin({
+                ...loginStore.login,
                 password,
               });
             }}
@@ -109,23 +117,14 @@ const Login = () => {
           type="submit"
           className="w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium py-2 rounded-lg hover:from-purple-700 hover:to-blue-600 transition-all duration-300"
           onClick={async () => {
-            await fetch(`${baseURL()}/auth/login`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                ...inputs,
-              }),
-            })
-              .then((response) => response.json())
-              .then((response) => {
+            loginStore.loginService
+              .login(loginStore.login)
+              .then((response: any) => {
                 console.log({response});
                 if (response?.success) {
-                  // Navigate to home screen using Electron IPC
                   ipcRenderer.invoke('accessToken', response?.accessToken);
                   ipcRenderer.invoke('user', response?.user);
-                  ipcRenderer.invoke('companyList', companyList);
+                  ipcRenderer.invoke('companyList', loginStore.companyList);
                   navigate('/dashboard');
                 } else {
                   alert(response?.message);
@@ -135,11 +134,10 @@ const Login = () => {
         >
           Login
         </button>
-
         <p id="message" className="mt-4 text-center text-sm font-medium"></p>
       </div>
     </div>
   );
-};
+});
 
 export default Login;

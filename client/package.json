@@ -16,6 +16,7 @@
     "eject": "react-scripts eject"
   },
   "dependencies": {
+    "@apollo/client": "^3.12.6",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^14.4.3",
@@ -24,11 +25,13 @@
     "@types/node": "^18.13.0",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
+    "apollo-upload-client": "16.0.0",
     "axios": "^1.7.9",
     "electron-devtools-installer": "^3.2.0",
     "electron-reload": "^1.5.0",
     "form-data": "^4.0.1",
     "fs": "^0.0.1-security",
+    "lodash": "^4.17.21",
     "mobx": "^6.13.5",
     "mobx-react": "^9.2.0",
     "react": "^18.2.0",
@@ -39,12 +42,24 @@
     "web-vitals": "^3.1.1"
   },
   "build": {
+    "appId": "com.limsplus.connect",
+    "productName": "LimsPlus Connect",
     "extends": null,
     "files": [
       "build/**/*"
     ],
     "directories": {
       "buildResources": "assets"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "eslintConfig": {
@@ -71,6 +86,8 @@
     "os": false
   },
   "devDependencies": {
+    "@types/apollo-upload-client": "^17.0.0",
+    "@types/lodash": "^4.17.14",
     "concurrently": "^7.6.0",
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
