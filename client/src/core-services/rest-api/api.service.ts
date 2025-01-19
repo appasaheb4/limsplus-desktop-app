@@ -155,7 +155,16 @@ export class Service {
     return new ServiceResponse<T>(0, response?.data);
   }
 }
+
+const getBaseUrl = (env: string): string => {
+  switch (env) {
+    case 'Production':
+      return process.env.REACT_APP_API_HOST_PORD!;
+    default:
+      return process.env.REACT_APP_API_HOST_LOCAL!;
+  }
+};
 export const service = new Service(
-  'https://limsplus-service.azurewebsites.net/api'
+  getBaseUrl(process.env.REACT_APP_ENV || 'Local')
 );
 export const serviceLocal = new Service('http://localhost:8080/api/');

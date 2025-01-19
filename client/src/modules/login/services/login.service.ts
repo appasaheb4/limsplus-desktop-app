@@ -4,7 +4,7 @@ export class LoginService {
   async login(payload: any) {
     try {
       const result = await service
-        .post('/auth/login', {payload})
+        .post('/auth/login', {...payload})
         .then((response) => response.data);
       return result;
     } catch (error) {
@@ -18,6 +18,17 @@ export class LoginService {
         .get('/company/list')
         .then((response) => response.data);
       stores.loginStore.updateCompanyList(result?.companyList);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async userFindByFields(payload: any) {
+    try {
+      const result = await service
+        .post('/auth/userFindByFields', {...payload})
+        .then((response) => response.data);
+      return result;
     } catch (error) {
       throw error;
     }

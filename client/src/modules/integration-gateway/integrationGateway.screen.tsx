@@ -1,8 +1,6 @@
 import {useEffect, useState} from 'react';
 import {observer} from 'mobx-react';
 import {useStores} from '../../stores';
-import {fetchEnvironment} from './services';
-import {fetchInstrumentDetails} from './services';
 const {ipcRenderer} = window.require('electron');
 
 const IntegrationGateway = observer(() => {
@@ -31,7 +29,9 @@ const IntegrationGateway = observer(() => {
         ...inputs,
         companyCode: user.companyCode,
       });
-      fetchEnvironment({code: user.companyCode});
+      integrationGatewayStore.integrationGatewayService.fetchEnvironment({
+        code: user.companyCode,
+      });
     });
   }, []);
 
@@ -170,10 +170,12 @@ const IntegrationGateway = observer(() => {
                       environment,
                     });
                     removeOptions(document.getElementById('intrumentType'));
-                    fetchInstrumentDetails({
-                      companyCode: inputs?.companyCode,
-                      environment,
-                    });
+                    integrationGatewayStore.integrationGatewayService.fetchInstrumentDetails(
+                      {
+                        companyCode: inputs?.companyCode,
+                        environment,
+                      }
+                    );
                   }}
                 >
                   <option>Select</option>

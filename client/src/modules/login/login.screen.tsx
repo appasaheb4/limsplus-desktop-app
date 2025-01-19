@@ -3,6 +3,7 @@ import {observer} from 'mobx-react';
 import {useEffect} from 'react';
 import Background from '../../assets/images/bg-login.png';
 import {useStores} from '../../stores';
+import {toJS} from 'mobx';
 const {ipcRenderer} = window.require('electron');
 
 const Login = observer(() => {
@@ -71,6 +72,21 @@ const Login = observer(() => {
                 username,
               });
             }}
+            onBlur={(e) => {
+              const username = e.target.value;
+              loginStore.loginService
+                .userFindByFields({
+                  username,
+                  companyCode: loginStore.login.companyCode,
+                })
+                .then((response: any) => {
+                  if (response?.success) {
+                    loginStore.updateLabList(response?.user?.lab);
+                  } else {
+                    alert(response?.message);
+                  }
+                });
+            }}
           />
         </div>
         <div className="mb-4">
@@ -89,7 +105,7 @@ const Login = observer(() => {
             }}
           >
             <option>Select</option>
-            {loginStore.companyList?.map((item: any) => (
+            {loginStore.labList?.map((item: any) => (
               <option value={item.code}>{item.name}</option>
             ))}
           </select>
@@ -120,11 +136,16 @@ const Login = observer(() => {
             loginStore.loginService
               .login(loginStore.login)
               .then((response: any) => {
-                console.log({response});
                 if (response?.success) {
                   ipcRenderer.invoke('accessToken', response?.accessToken);
-                  ipcRenderer.invoke('user', response?.user);
-                  ipcRenderer.invoke('companyList', loginStore.companyList);
+                  ipcRenderer.invoke('user', {
+                    ...response?.user,
+                    loginLab: loginStore.login.lab,
+                  });
+                  ipcRenderer.invoke(
+                    'companyList',
+                    toJS(loginStore.companyList)
+                  );
                   navigate('/dashboard');
                 } else {
                   alert(response?.message);

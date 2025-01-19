@@ -4,9 +4,12 @@ import Home from './modules/home/home.screen';
 import IntegrationGateway from './modules/integration-gateway/integrationGateway.screen';
 
 import {stores} from './stores';
+import {useEffect} from 'react';
 
 function App() {
-  console.log({isLoading: stores.loading});
+  useEffect(() => {
+    stores.setLoading(false);
+  });
 
   return (
     <div className="flex">
