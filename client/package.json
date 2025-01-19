@@ -46,7 +46,8 @@
     "productName": "LimsPlus Connect",
     "extends": null,
     "files": [
-      "build/**/*"
+      "build/**/*",
+      "electron/**/*"
     ],
     "directories": {
       "buildResources": "assets"
@@ -59,7 +60,10 @@
     "nsis": {
       "oneClick": false,
       "perMachine": true,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LimsPlus Connect"
     }
   },
   "eslintConfig": {
