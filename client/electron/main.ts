@@ -143,9 +143,11 @@ ipcMain.handle('read-companyList', (event) => {
 });
 
 ipcMain.handle('receivedMessage', async (event, payload) => {
-  messageStore.set('receivedMessage', payload).then(() => {
-    event.sender.send('stored-received-message');
-  });
+  await messageStore.set('receivedMessage', payload);
+  event.sender.send('stored-received-message');
+  // .then(() => {
+  //   event.sender.send('stored-received-message');
+  // });
 });
 
 ipcMain.on('file:upload', async (event, opt: any) => {

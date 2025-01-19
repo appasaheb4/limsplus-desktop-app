@@ -35,6 +35,118 @@ const IntegrationGateway = observer(() => {
     });
   }, []);
 
+  const openMessageModal = () => {
+    const modal = document.getElementById('messageModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    } else {
+      console.error('Modal element not found');
+    }
+  };
+
+  function closeMessageModal() {
+    const modal = document.getElementById('messageModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.add('hidden');
+    }
+  }
+
+  const connect = () => {
+    const connectButton = document.getElementById('connectButton');
+
+    // when you got  EOT then call this fun.
+    ipcRenderer.invoke('receivedMessage', [
+      '\x05',
+      'h|\\^&|||XP-100^00-14^^^^B7935^BS649542||||||||E1394-97<CR><ETX>65<CR><LF>',
+      'p|1<CR><ETX>3F<CR><LF>',
+      'o|1||^^102132^M|^^^^WBC\\^^^^RBC\\^^^^HGB\\^^^^HCT\\^^^^MCV\\^^^^MCH\\^^^^MCHC\\^^^^PLT\\^^^^LYM%\\^^^^MXD%\\^^^^NEUT%\\^^^^LYM#\\^^^^MXD#\\^^^^NEUT#\\^^^^RDW-SD\\^^^^RDW-CV\\^^^^PDW\\^^^^MPV\\^^^^P-LCR\\^^^^PCT|||||||N||||||||||||||F<CR><ETX>CE<CR><LF>',
+      'r|1|^^^^WBC^1|  8.4|10*3/uL||W||||               ||20230311135610<CR><ETX>F5<CR><LF>',
+      'r|2|^^^^RBC^1| 4.86|10*6/uL||N||||               ||20230311135610<CR><ETX>02<CR><LF>',
+      'r|3|^^^^HGB^1| 13.7|g/dL||N||||               ||20230311135610<CR><ETX>8C<CR><LF>',
+      'r|4|^^^^HCT^1| 41.9|%||N||||               ||20230311135610<CR><ETX>7E<CR><LF>',
+      'r|5|^^^^MCV^1| 86.2|fL||N||||               ||20230311135610<CR><ETX>0E<CR><LF>',
+      'r|6|^^^^MCH^1| 28.2|pg||N||||               ||20230311135610<CR><ETX>23<CR><LF>',
+      'r|7|^^^^MCHC^1| 32.7|g/dL||N||||               ||20230311135610<CR><ETX>D7<CR><LF>',
+      'r|8|^^^^PLT^1|  213|10*3/uL||W||||               ||20230311135610<CR><ETX>0B<CR><LF>',
+      'r|9|^^^^LYM%^1| 33.1|%||W||||               ||20230311135610<CR><ETX>BA<CR><LF>',
+      'r|10|^^^^MXD%^1|  8.5|%||W||||               ||20230311135610<CR><ETX>D0<CR><LF>',
+      'r|11|^^^^NEUT%^1| 58.4|%||W||||               ||20230311135610<CR><ETX>39<CR><LF>',
+      'r|12|^^^^LYM#^1|  2.8|10*3/uL||W||||               ||20230311135610<CR><ETX>61<CR><LF>',
+      'r|13|^^^^MXD#^1|  0.7|10*3/uL||W||||               ||20230311135610<CR><ETX>4F<CR><LF>',
+      'r|14|^^^^NEUT#^1|  4.9|10*3/uL||W||||               ||20230311135610<CR><ETX>AA<CR><LF>',
+      'r|15|^^^^RDW-SD^1| 42.8|fL||N||||               ||20230311135610<CR><ETX>0A<CR><LF>',
+      'r|16|^^^^RDW-CV^1| 12.3|%||N||||               ||20230311135610<CR><ETX>79<CR><LF>',
+      'r|17|^^^^PDW^1| 12.4|fL||N||||               ||20230311135610<CR><ETX>41<CR><LF>',
+      'r|18|^^^^MPV^1| 10.7|fL||N||||               ||20230311135610<CR><ETX>4C<CR><LF>',
+      'r|19|^^^^P-LCR^1| 29.7|%||N||||               ||20230311135610<CR><ETX>36<CR><LF>',
+      'r|20|^^^^PCT^1| 0.23|%||W||||               ||20230311135610<CR><ETX>B4<CR><LF>',
+      'l|1|N<CR><ETX>03<CR><LF>',
+    ]);
+    // Validate form inputs
+    const missingFields = [];
+    if (!inputs.ip) {
+      missingFields.push('IP Address');
+    }
+    if (!inputs.port) {
+      missingFields.push('Port');
+    }
+    if (!inputs.companyCode) {
+      missingFields.push('Company Code');
+    }
+    if (!inputs.environment) {
+      missingFields.push('Environment');
+    }
+    if (!inputs.instrumentType) {
+      missingFields.push('Instrument Type');
+    }
+    if (!inputs.instrumentId) {
+      missingFields.push('Instrument ID');
+    }
+    if (missingFields.length > 0) {
+      alert(
+        `Please fill out the following fields:\n- ${missingFields.join('\n- ')}`
+      );
+      return false;
+    }
+
+    // Add a new row to the table
+    const tableBody = document.getElementById('logsTableBody');
+    const newRow = document.createElement('tr');
+    // Get the current time
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString();
+    newRow.innerHTML = `
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs?.ip}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.port}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.companyCode}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.environment}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentType}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentId}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">
+          Progress
+        </td><td class="px-4 py-2 border border-gray-300 text-white text-center">
+    <i
+    class="fas fa-expand text-blue-500 cursor-pointer"
+    id="toggleModalIcon"
+    ></i></td>
+    <td class="px-4 py-2 border border-gray-300 text-white text-center">
+      ${currentTime}
+    </td>
+    `;
+    if (tableBody) {
+      tableBody.appendChild(newRow);
+    } else {
+      console.error('Table body element not found');
+    }
+    if (connectButton) {
+      connectButton.innerText = 'Disconnect';
+      connectButton.classList.add('bg-red-500'); // Change button color for Disconnect
+      connectButton.classList.remove('bg-blue-500');
+    }
+  };
+
   return (
     <div className="flex p-2 w-full h-screen  items-center justify-center bg-gradient-to-r from-purple-600 to-blue-500">
       <div className="shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col text-white">
@@ -241,6 +353,9 @@ const IntegrationGateway = observer(() => {
                 <button
                   id="connectButton"
                   className="bg-blue-500 text-white px-6 py-2 text-sm rounded-md"
+                  onClick={() => {
+                    connect();
+                  }}
                 >
                   Connect
                 </button>
@@ -280,9 +395,31 @@ const IntegrationGateway = observer(() => {
                   </th>
                 </tr>
               </thead>
-
               <tbody id="logsTableBody"></tbody>
             </table>
+          </div>
+        </div>
+        <div
+          id="messageModal"
+          className="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center"
+        >
+          <div className="bg-white text-black rounded-lg">
+            <h2 className="text-xl font-bold mb-4 text-center">
+              Data Received To Instrument
+            </h2>
+            <textarea
+              id="secondSpaceContent"
+              className="w-full border border-gray-300 rounded p-2"
+              placeholder="Received Data"
+            ></textarea>
+            <div className="flex space-x-2 mt-4 justify-end">
+              <button
+                className="bg-gray-500 text-white px-4 py-2 rounded"
+                onClick={() => closeMessageModal()}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

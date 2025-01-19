@@ -3,7 +3,7 @@ import {observer} from 'mobx-react';
 import {useStores} from '../../stores';
 import './style.css';
 
-const {ipcRenderer} = window.require('electron');
+const {ipcRenderer, shell} = window.require('electron');
 
 const Home = observer(() => {
   const {integrationGatewayStore} = useStores();
@@ -80,7 +80,16 @@ const Home = observer(() => {
             Configurations
           </div>
           <div className="flex flex-col gap-2">
-            <button className="item">Instrument Logs</button>
+            <button
+              className="item"
+              onClick={() => {
+                shell.openPath(
+                  '/Users/appasaheb4/Library/Application Support/limsplus-connect/received-message.json'
+                );
+              }}
+            >
+              Instrument Logs
+            </button>
             <button className="item">Image Files</button>
             <button className="item">HL7 Files</button>
             <button className="item">Backup/Restore</button>
