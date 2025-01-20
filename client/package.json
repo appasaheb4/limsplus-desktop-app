@@ -12,7 +12,7 @@
     "postinstall": "electron-builder install-app-deps",
     "dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
     "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
-    "electron:build": "rm -rf dist && yarn build && tsc -p electron && electron-builder --win",
+    "electron:build": "rm -rf dist && yarn build && tsc -p electron && electron-builder",
     "eject": "react-scripts eject"
   },
   "dependencies": {
