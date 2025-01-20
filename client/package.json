@@ -44,9 +44,6 @@
   "build": {
     "appId": "com.limsplus.connect",
     "productName": "LimsPlus Connect",
-    "publisherName": "LimsPlus",
-    "version": "1.0.1",
-    "description": "LimsPlus Connect Desktop Application",
     "extends": null,
     "files": [
       "build/**/*",
@@ -59,8 +56,7 @@
       "target": "nsis",
       "icon": "assets/icon.ico",
       "artifactName": "${productName}.exe",
-      "legalTrademarks": "(c) 2024 https://www.limsplus.co.in",
-      "publisherName": "LimsPlus"
+      "legalTrademarks": "(c) 2024 https://www.limsplus.co.in"
     },
     "nsis": {
       "oneClick": false,
@@ -69,6 +65,23 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "LimsPlus Connect"
+    },
+    "dmg": {
+      "title": "LimsPlus Connect",
+      "icon": "assets/icon.icns",
+      "artifactName": "${productName}.dmg",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   },
   "eslintConfig": {
