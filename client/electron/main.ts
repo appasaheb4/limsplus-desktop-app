@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, screen} from 'electron';
+import {app, BrowserWindow, ipcMain, shell} from 'electron';
 import * as path from 'path';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
@@ -165,4 +165,17 @@ ipcMain.on('file:upload', async (event, opt: any) => {
       if (res.success) event.sender.send('upload:complete', res.message);
     });
   return true;
+});
+
+ipcMain.handle('check-file-exists', async (event, filePath) => {
+  return fs.existsSync(filePath);
+});
+
+ipcMain.handle('open-file', async (event, filePath) => {
+  if (fs.existsSync(filePath)) {
+    shell.openPath(filePath);
+    return true;
+  } else {
+    return false;
+  }
 });

@@ -1,6 +1,7 @@
 import {useEffect} from 'react';
 import {observer} from 'mobx-react';
 import {useStores} from '../../stores';
+import fs from 'fs';
 import './style.css';
 
 const {ipcRenderer, shell} = window.require('electron');
@@ -82,10 +83,21 @@ const Home = observer(() => {
           <div className="flex flex-col gap-2">
             <button
               className="item"
-              onClick={() => {
-                shell.openPath(
-                  '/Users/appasaheb4/Library/Application Support/limsplus-connect/received-message.json'
-                );
+              onClick={async () => {
+                const checkFileExists = async (filePath: string) => {
+                  return await ipcRenderer.invoke(
+                    'check-file-exists',
+                    filePath
+                  );
+                };
+                const filePath =
+                  '/Users/appasaheb4/Library/Application Support/limsplus-connect/received-message.json';
+                const fileExists = await checkFileExists(filePath);
+                if (fileExists) {
+                  await ipcRenderer.invoke('open-file', filePath);
+                } else {
+                  alert('Log file does not exist');
+                }
               }}
             >
               Instrument Logs

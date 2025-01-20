@@ -135,6 +135,10 @@ const IntegrationGateway = observer(() => {
       ${currentTime}
     </td>
     `;
+    const toggleModalIcon = newRow.querySelector('#toggleModalIcon');
+    if (toggleModalIcon) {
+      toggleModalIcon.addEventListener('click', openMessageModal);
+    }
     if (tableBody) {
       tableBody.appendChild(newRow);
     } else {
@@ -403,7 +407,7 @@ const IntegrationGateway = observer(() => {
           id="messageModal"
           className="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center"
         >
-          <div className="bg-white text-black rounded-lg">
+          <div className="bg-white text-black rounded-lg p-4 w-full mx-10">
             <h2 className="text-xl font-bold mb-4 text-center">
               Data Received To Instrument
             </h2>
@@ -411,8 +415,9 @@ const IntegrationGateway = observer(() => {
               id="secondSpaceContent"
               className="w-full border border-gray-300 rounded p-2"
               placeholder="Received Data"
+              rows={10}
             ></textarea>
-            <div className="flex space-x-2 mt-4 justify-end">
+            <div className="flex space-x-2 mt-2 justify-end">
               <button
                 className="bg-gray-500 text-white px-4 py-2 rounded"
                 onClick={() => closeMessageModal()}
