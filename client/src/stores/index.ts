@@ -5,6 +5,7 @@ export class Stores {
   private isLoading: boolean;
   integrationGatewayStore: IntegrationGatewayStore;
   loginStore: LoginStore;
+  localStoragePath: string = '';
   constructor() {
     this.isLoading = false;
     this.integrationGatewayStore = new IntegrationGatewayStore();
@@ -16,6 +17,9 @@ export class Stores {
   }
   setLoading(value: boolean) {
     this.isLoading = value;
+  }
+  updateLocalStoragePath(path: string) {
+    this.localStoragePath = path;
   }
 }
 

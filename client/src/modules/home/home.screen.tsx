@@ -1,13 +1,12 @@
 import {useEffect} from 'react';
 import {observer} from 'mobx-react';
 import {useStores} from '../../stores';
-import fs from 'fs';
 import './style.css';
 
-const {ipcRenderer, shell} = window.require('electron');
+const {ipcRenderer, app} = window.require('electron');
 
 const Home = observer(() => {
-  const {integrationGatewayStore} = useStores();
+  const {integrationGatewayStore, localStoragePath} = useStores();
   useEffect(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', (event, user) => {
@@ -92,7 +91,8 @@ const Home = observer(() => {
                   );
                 };
                 const filePath =
-                  '/Users/appasaheb4/Library/Application Support/limsplus-connect/received-message.json';
+                  (await ipcRenderer.invoke('get-user-data-path')) +
+                  '/received-message.json';
                 const fileExists = await checkFileExists(filePath);
                 if (fileExists) {
                   await ipcRenderer.invoke('open-file', filePath);

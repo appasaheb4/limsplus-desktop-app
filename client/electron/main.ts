@@ -194,3 +194,7 @@ ipcMain.on('set-title', (event, title) => {
     childWindows.webContents.send('set-title', title); // Send title to renderer process
   }
 });
+
+ipcMain.handle('get-user-data-path', () => {
+  return app.getPath('userData');
+});
