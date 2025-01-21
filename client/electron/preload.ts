@@ -18,3 +18,13 @@ contextBridge.exposeInMainWorld('api', {
     console.log(data);
   },
 });
+
+// window.addEventListener('DOMContentLoaded', () => {
+//   ipcRenderer.on('set-title', (event, title) => {
+//     document.title = title; // Set the document title
+//     const titleElement = document.getElementById('title');
+//     if (titleElement) {
+//       titleElement.innerText = title; // Update the title element in the HTML
+//     }
+//   });
+// });

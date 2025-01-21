@@ -57,7 +57,8 @@ const Home = observer(() => {
                 ipcRenderer.send(
                   'navigate-to-iframe-screen',
                   integrationGatewayStore.integrationGateway.companyDetails
-                    ?.webPortal
+                    ?.webPortal,
+                  'LimsPlus Lite'
                 );
               }}
             >

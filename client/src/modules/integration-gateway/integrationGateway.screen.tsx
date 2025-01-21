@@ -33,6 +33,7 @@ const IntegrationGateway = observer(() => {
         code: user.companyCode,
       });
     });
+    ipcRenderer.send('set-title', 'Integration Gateway');
   }, []);
 
   const openMessageModal = () => {
@@ -153,6 +154,7 @@ const IntegrationGateway = observer(() => {
 
   return (
     <div className="flex p-2 w-full h-screen  items-center justify-center bg-gradient-to-r from-purple-600 to-blue-500">
+      <title id="title">LimsPlus Connect</title>
       <div className="shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col text-white">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-2 p-6 border rounded-lg shadow-sm bg-[#2a2a2a]">

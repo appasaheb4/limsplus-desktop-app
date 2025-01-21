@@ -13,6 +13,7 @@ const FormData = require('form-data');
 const {default: axios} = require('axios');
 
 let mainWindow: any;
+// let childWindows = [];
 let childWindows: any;
 
 const isDev = !app.isPackaged;
@@ -38,9 +39,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
     height: 768,
-    // frame: true,
     resizable: false,
     icon: path.join(__dirname, '../assets/icon.ico'),
+    skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true,
@@ -60,6 +61,10 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../index.html'));
   }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
 app.whenReady().then(() => {
@@ -90,7 +95,6 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       contextIsolation: false,
     },
   });
-  childWindows.maximize();
   if (isDev) {
     childWindows.webContents.openDevTools();
     childWindows.loadURL(`http://localhost:3000/#${route}`);
@@ -99,9 +103,13 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       hash: route,
     });
   }
+  childWindows.once('ready-to-show', () => {
+    childWindows.maximize();
+    childWindows.show();
+  });
 });
 
-ipcMain.on('navigate-to-iframe-screen', (event, url) => {
+ipcMain.on('navigate-to-iframe-screen', (event, url, title) => {
   childWindows = new BrowserWindow({
     parent: mainWindow,
     webPreferences: {
@@ -111,9 +119,9 @@ ipcMain.on('navigate-to-iframe-screen', (event, url) => {
     },
   });
   childWindows.maximize();
-  if (isDev) {
-    childWindows.loadURL(url);
-  }
+  childWindows.loadURL(url);
+  childWindows.setTitle(title);
+  childWindows.webContents.send('set-title', title); // Send title to renderer process
 });
 
 ipcMain.handle('accessToken', async (sender, payload) => {
@@ -177,5 +185,12 @@ ipcMain.handle('open-file', async (event, filePath) => {
     return true;
   } else {
     return false;
+  }
+});
+
+ipcMain.on('set-title', (event, title) => {
+  if (childWindows) {
+    childWindows.setTitle(title);
+    childWindows.webContents.send('set-title', title); // Send title to renderer process
   }
 });
