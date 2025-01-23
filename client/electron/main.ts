@@ -1,37 +1,39 @@
-import {app, BrowserWindow, ipcMain, shell} from 'electron';
-import * as path from 'path';
+import { app, BrowserWindow, ipcMain, shell } from "electron";
+import * as path from "path";
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
-} from 'electron-devtools-installer';
+} from "electron-devtools-installer";
 
-const Store = require('./store.js');
-const MessageStore = require('./messageStore.js');
+const Store = require("./store.js");
+const MessageStore = require("./messageStore.js");
+const WebSocket = require("ws");
 
 // for file upload
-const fs = require('fs');
-const FormData = require('form-data');
-const {default: axios} = require('axios');
+const fs = require("fs");
+const FormData = require("form-data");
+const { default: axios } = require("axios");
 
 let mainWindow: any;
 // let childWindows = [];
 let childWindows: any;
+let ws: WebSocket | null = null; // Define ws in a global scope
 
 const isDev = !app.isPackaged;
-process.env.NODE_ENV = 'production';
+process.env.NODE_ENV = "production";
 
 const store = new Store({
-  configName: 'user-preferences',
+  configName: "user-preferences",
   defaults: {
-    accessToken: '',
+    accessToken: "",
     user: {},
     companyList: [],
   },
 });
 
 const messageStore = new MessageStore({
-  configName: 'received-message',
+  configName: "received-message",
   defaults: {
-    receivedMessage: '',
+    receivedMessage: "",
   },
 });
 
@@ -40,29 +42,29 @@ function createWindow() {
     width: isDev ? 1424 : 1024,
     height: 768,
     resizable: false,
-    icon: path.join(__dirname, '../assets/icon.ico'),
+    icon: path.join(__dirname, "../assets/icon.ico"),
     skipTaskbar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: true,
       contextIsolation: false,
     },
   });
-  const user = store.get('user');
+  const user = store.get("user");
   if (user?.userId) {
-    mainWindow.webContents.on('did-finish-load', () => {
-      mainWindow.webContents.send('user', user);
+    mainWindow.webContents.on("did-finish-load", () => {
+      mainWindow.webContents.send("user", user);
     });
   }
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL("http://localhost:3000");
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../index.html'));
+    mainWindow.loadFile(path.join(__dirname, "../index.html"));
   }
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
@@ -71,26 +73,26 @@ app.whenReady().then(() => {
   // DevTools
   installExtension(REACT_DEVELOPER_TOOLS)
     .then((name) => console.log(`Added Extension:  ${name}`))
-    .catch((err) => console.log('An error occurred: ', err));
+    .catch((err) => console.log("An error occurred: ", err));
   createWindow();
   // app.on('activate', () => {
   //   if (BrowserWindow.getAllWindows().length === 0) {
   //     createWindow();
   //   }
   // });
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
       app.quit();
     }
   });
 });
 
-ipcMain.on('navigate-to-integration-gateway', (event, route) => {
+ipcMain.on("navigate-to-integration-gateway", (event, route) => {
   childWindows = new BrowserWindow({
     parent: mainWindow,
     alwaysOnTop: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: true,
       contextIsolation: false,
     },
@@ -99,21 +101,21 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     childWindows.webContents.openDevTools();
     childWindows.loadURL(`http://localhost:3000/#${route}`);
   } else {
-    childWindows.loadFile(path.join(__dirname, '../index.html'), {
+    childWindows.loadFile(path.join(__dirname, "../index.html"), {
       hash: route,
     });
   }
-  childWindows.once('ready-to-show', () => {
+  childWindows.once("ready-to-show", () => {
     childWindows.maximize();
     childWindows.show();
   });
 });
 
-ipcMain.on('navigate-to-iframe-screen', (event, url, title) => {
+ipcMain.on("navigate-to-iframe-screen", (event, url, title) => {
   childWindows = new BrowserWindow({
     parent: mainWindow,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: true,
       contextIsolation: false,
     },
@@ -121,48 +123,48 @@ ipcMain.on('navigate-to-iframe-screen', (event, url, title) => {
   childWindows.maximize();
   childWindows.loadURL(url);
   childWindows.setTitle(title);
-  childWindows.webContents.send('set-title', title); // Send title to renderer process
+  childWindows.webContents.send("set-title", title); // Send title to renderer process
 });
 
-ipcMain.handle('accessToken', async (sender, payload) => {
-  store.set('accessToken', payload);
+ipcMain.handle("accessToken", async (sender, payload) => {
+  store.set("accessToken", payload);
 });
 
-ipcMain.handle('user', async (sender, payload) => {
-  store.set('user', payload);
+ipcMain.handle("user", async (sender, payload) => {
+  store.set("user", payload);
 });
 
-ipcMain.handle('read-user', (event) => {
-  let user = store.get('user');
+ipcMain.handle("read-user", (event) => {
+  let user = store.get("user");
   if (user) {
-    event.sender.send('send-user', user);
+    event.sender.send("send-user", user);
   }
 });
 
-ipcMain.handle('companyList', async (sender, payload) => {
-  store.set('companyList', payload);
+ipcMain.handle("companyList", async (sender, payload) => {
+  store.set("companyList", payload);
 });
 
-ipcMain.handle('read-companyList', (event) => {
-  let companyList = store.get('companyList');
+ipcMain.handle("read-companyList", (event) => {
+  let companyList = store.get("companyList");
   if (companyList) {
-    event.sender.send('send-companyList', companyList);
+    event.sender.send("send-companyList", companyList);
   }
 });
 
-ipcMain.handle('receivedMessage', async (event, payload) => {
-  await messageStore.set('receivedMessage', payload);
-  event.sender.send('stored-received-message');
+ipcMain.handle("receivedMessage", async (event, payload) => {
+  await messageStore.set("receivedMessage", payload);
+  event.sender.send("stored-received-message");
   // .then(() => {
   //   event.sender.send('stored-received-message');
   // });
 });
 
-ipcMain.on('file:upload', async (event, opt: any) => {
+ipcMain.on("file:upload", async (event, opt: any) => {
   var form = new FormData();
   for (const [key, value] of Object.entries(opt)) {
-    if (key == 'file') form.append('file', fs.createReadStream(opt.file));
-    if (key !== 'url') form.append(key, value);
+    if (key == "file") form.append("file", fs.createReadStream(opt.file));
+    if (key !== "url") form.append(key, value);
   }
   await axios
     .post(opt?.url, form, {
@@ -170,16 +172,16 @@ ipcMain.on('file:upload', async (event, opt: any) => {
     })
     .then((response: any) => {
       const res = response.data;
-      if (res.success) event.sender.send('upload:complete', res.message);
+      if (res.success) event.sender.send("upload:complete", res.message);
     });
   return true;
 });
 
-ipcMain.handle('check-file-exists', async (event, filePath) => {
+ipcMain.handle("check-file-exists", async (event, filePath) => {
   return fs.existsSync(filePath);
 });
 
-ipcMain.handle('open-file', async (event, filePath) => {
+ipcMain.handle("open-file", async (event, filePath) => {
   if (fs.existsSync(filePath)) {
     shell.openPath(filePath);
     return true;
@@ -188,13 +190,97 @@ ipcMain.handle('open-file', async (event, filePath) => {
   }
 });
 
-ipcMain.on('set-title', (event, title) => {
+ipcMain.on("set-title", (event, title) => {
   if (childWindows) {
     childWindows.setTitle(title);
-    childWindows.webContents.send('set-title', title); // Send title to renderer process
+    childWindows.webContents.send("set-title", title); // Send title to renderer process
   }
 });
 
-ipcMain.handle('get-user-data-path', () => {
-  return app.getPath('userData');
+ipcMain.handle("get-user-data-path", () => {
+  return app.getPath("userData");
+});
+
+ipcMain.handle("start-server", async (event, ip, tcpPort) => {
+  try {
+    console.log(`Starting server on ${ip}:${tcpPort}`);
+    const response = await axios.get(
+      `http://localhost:9000/start-tcp?ip=${ip}&tcpPort=${tcpPort}`
+    );
+    console.log("Server started:", response.data);
+    event.sender.send("server-message", response.data);
+  } catch (error: any) {
+    console.error("Error starting server:", error.message);
+    event.sender.send(
+      "server-message",
+      `Error starting server: ${error.message}`
+    );
+  }
+});
+
+ipcMain.handle("connect-ws", (event) => {
+  const wsUrl = `ws://localhost:6000/ws`;
+  console.log("Connecting to WebSocket URL:", wsUrl);
+
+  // if (ws) {
+  //   ws.close();
+  //   ws = null;
+  // }
+
+  let ws = new WebSocket(wsUrl);
+
+  ws.on("open", () => {
+    console.log("WebSocket connected");
+    event.sender.send("ws-connected", "WebSocket connection established");
+  });
+
+  ws.on("message", (data: any) => {
+    console.log("Received WebSocket data:", data.toString());
+    event.sender.send("ws-data", data.toString());
+  });
+
+  ws.on("close", () => {
+    console.log("WebSocket disconnected");
+    event.sender.send("ws-disconnected", "WebSocket connection closed");
+    ws = null;
+  });
+
+  ws.on("error", (error: any) => {
+    console.error("WebSocket error:", error.message);
+    event.sender.send("ws-error", error.message);
+  });
+});
+
+ipcMain.handle("disconnect-ws", async (event, ip, tcpPort) => {
+  if (ws) {
+    ws.close();
+    ws = null;
+  } else {
+    event.sender.send(
+      "ws-error",
+      "No active WebSocket connection to disconnect"
+    );
+  }
+
+  try {
+    const response = await axios.get(
+      `http://localhost:9000/stop?ip=${ip}&tcpPort=${tcpPort}`
+    );
+    event.sender.send("server-message", response.data);
+  } catch (error: any) {
+    console.error("Error stopping server:", error.message);
+    event.sender.send(
+      "server-message",
+      `Error stopping server: ${error.message}`
+    );
+  }
+});
+
+ipcMain.handle("send-ws", (event, message) => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(message);
+    console.log("Message sent:", message);
+  } else {
+    event.sender.send("ws-error", "WebSocket is not connected");
+  }
 });

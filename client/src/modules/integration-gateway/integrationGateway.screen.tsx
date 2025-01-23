@@ -1,18 +1,19 @@
-import {useEffect, useState} from 'react';
-import {observer} from 'mobx-react';
-import {useStores} from '../../stores';
-const {ipcRenderer} = window.require('electron');
+import { useEffect, useState } from "react";
+import { observer } from "mobx-react";
+import { useStores } from "../../stores";
+const { ipcRenderer } = window.require("electron");
 
 const IntegrationGateway = observer(() => {
-  const {integrationGatewayStore} = useStores();
+  const { integrationGatewayStore } = useStores();
   const [inputs, setInputs] = useState({
-    ip: '127.0.0.1',
-    port: '8080',
-    companyCode: '',
-    environment: '',
-    instrumentType: '',
-    instrumentId: '',
+    ip: "127.0.0.1",
+    port: "8080",
+    companyCode: "",
+    environment: "",
+    instrumentType: "",
+    instrumentId: "",
   });
+  const [isConnected, setIsConnected] = useState(false);
 
   function removeOptions(selectElement: any) {
     var i,
@@ -23,8 +24,8 @@ const IntegrationGateway = observer(() => {
   }
 
   useEffect(() => {
-    ipcRenderer.invoke('read-user');
-    ipcRenderer.on('send-user', (event, user) => {
+    ipcRenderer.invoke("read-user");
+    ipcRenderer.on("send-user", (event, user) => {
       setInputs({
         ...inputs,
         companyCode: user.companyCode,
@@ -33,123 +34,195 @@ const IntegrationGateway = observer(() => {
         code: user.companyCode,
       });
     });
-    ipcRenderer.send('set-title', 'Integration Gateway');
+    ipcRenderer.send("set-title", "Integration Gateway");
   }, []);
 
   const openMessageModal = () => {
-    const modal = document.getElementById('messageModal');
+    const modal = document.getElementById("messageModal");
     if (modal) {
-      modal.classList.remove('hidden');
-      modal.style.display = 'flex';
+      modal.classList.remove("hidden");
+      modal.style.display = "flex";
     } else {
-      console.error('Modal element not found');
+      console.error("Modal element not found");
     }
   };
 
   function closeMessageModal() {
-    const modal = document.getElementById('messageModal');
+    const modal = document.getElementById("messageModal");
     if (modal) {
-      modal.style.display = 'none';
-      modal.classList.add('hidden');
+      modal.style.display = "none";
+      modal.classList.add("hidden");
     }
   }
 
-  const connect = () => {
-    const connectButton = document.getElementById('connectButton');
+  const updateRowStatus = (status: string) => {
+    const statusCell = document.getElementById(
+      `status-${inputs.ip}-${inputs.port}`
+    );
+    if (statusCell) {
+      statusCell.textContent = status;
+    } else {
+      console.error("Status cell not found for the given IP and Port");
+    }
+  };
 
-    // when you got  EOT then call this fun.
-    ipcRenderer.invoke('receivedMessage', [
-      '\x05',
-      'h|\\^&|||XP-100^00-14^^^^B7935^BS649542||||||||E1394-97<CR><ETX>65<CR><LF>',
-      'p|1<CR><ETX>3F<CR><LF>',
-      'o|1||^^102132^M|^^^^WBC\\^^^^RBC\\^^^^HGB\\^^^^HCT\\^^^^MCV\\^^^^MCH\\^^^^MCHC\\^^^^PLT\\^^^^LYM%\\^^^^MXD%\\^^^^NEUT%\\^^^^LYM#\\^^^^MXD#\\^^^^NEUT#\\^^^^RDW-SD\\^^^^RDW-CV\\^^^^PDW\\^^^^MPV\\^^^^P-LCR\\^^^^PCT|||||||N||||||||||||||F<CR><ETX>CE<CR><LF>',
-      'r|1|^^^^WBC^1|  8.4|10*3/uL||W||||               ||20230311135610<CR><ETX>F5<CR><LF>',
-      'r|2|^^^^RBC^1| 4.86|10*6/uL||N||||               ||20230311135610<CR><ETX>02<CR><LF>',
-      'r|3|^^^^HGB^1| 13.7|g/dL||N||||               ||20230311135610<CR><ETX>8C<CR><LF>',
-      'r|4|^^^^HCT^1| 41.9|%||N||||               ||20230311135610<CR><ETX>7E<CR><LF>',
-      'r|5|^^^^MCV^1| 86.2|fL||N||||               ||20230311135610<CR><ETX>0E<CR><LF>',
-      'r|6|^^^^MCH^1| 28.2|pg||N||||               ||20230311135610<CR><ETX>23<CR><LF>',
-      'r|7|^^^^MCHC^1| 32.7|g/dL||N||||               ||20230311135610<CR><ETX>D7<CR><LF>',
-      'r|8|^^^^PLT^1|  213|10*3/uL||W||||               ||20230311135610<CR><ETX>0B<CR><LF>',
-      'r|9|^^^^LYM%^1| 33.1|%||W||||               ||20230311135610<CR><ETX>BA<CR><LF>',
-      'r|10|^^^^MXD%^1|  8.5|%||W||||               ||20230311135610<CR><ETX>D0<CR><LF>',
-      'r|11|^^^^NEUT%^1| 58.4|%||W||||               ||20230311135610<CR><ETX>39<CR><LF>',
-      'r|12|^^^^LYM#^1|  2.8|10*3/uL||W||||               ||20230311135610<CR><ETX>61<CR><LF>',
-      'r|13|^^^^MXD#^1|  0.7|10*3/uL||W||||               ||20230311135610<CR><ETX>4F<CR><LF>',
-      'r|14|^^^^NEUT#^1|  4.9|10*3/uL||W||||               ||20230311135610<CR><ETX>AA<CR><LF>',
-      'r|15|^^^^RDW-SD^1| 42.8|fL||N||||               ||20230311135610<CR><ETX>0A<CR><LF>',
-      'r|16|^^^^RDW-CV^1| 12.3|%||N||||               ||20230311135610<CR><ETX>79<CR><LF>',
-      'r|17|^^^^PDW^1| 12.4|fL||N||||               ||20230311135610<CR><ETX>41<CR><LF>',
-      'r|18|^^^^MPV^1| 10.7|fL||N||||               ||20230311135610<CR><ETX>4C<CR><LF>',
-      'r|19|^^^^P-LCR^1| 29.7|%||N||||               ||20230311135610<CR><ETX>36<CR><LF>',
-      'r|20|^^^^PCT^1| 0.23|%||W||||               ||20230311135610<CR><ETX>B4<CR><LF>',
-      'l|1|N<CR><ETX>03<CR><LF>',
-    ]);
-    // Validate form inputs
+  const appendLog = (message: string) => {
+    const logTextarea = document.getElementById(
+      "secondSpaceContent"
+    ) as HTMLTextAreaElement | null;
+
+    if (logTextarea) {
+      logTextarea.value += message + "\n"; // Append message
+      logTextarea.scrollTop = logTextarea.scrollHeight; // Auto-scroll
+    } else {
+      console.error('Textarea with ID "secondSpaceContent" not found');
+    }
+  };
+
+  const handleConnection = async () => {
+    let messageArray: string[] = [];
+
+    if (!validateInputs()) return;
+
+    if (isConnected) {
+      disconnect();
+    } else {
+      try {
+        // Add event listeners
+        ipcRenderer.once("ws-connected", (event, message) => {
+          console.log(message);
+          appendLog(message);
+          updateRowStatus("Connected");
+          ipcRenderer.invoke("start-server", inputs.ip, inputs.port);
+        });
+
+        ipcRenderer.once("server-message", (event, message) => {
+          appendLog(message);
+        });
+
+        ipcRenderer.once("ws-data", (event, hexData) => {
+          console.log("Received WebSocket data:", hexData);
+          appendLog(hexData);
+          if (hexData === "04") {
+            const asciiData = hexToASCII(hexData);
+            messageArray.push(asciiData);
+            appendLog(asciiData);
+            ipcRenderer.invoke("receivedMessage", messageArray);
+          }
+        });
+
+        ipcRenderer.once("ws-disconnected", (event, message) => {
+          appendLog(message);
+          updateRowStatus("Disconnected");
+          setIsConnected(false);
+        });
+
+        ipcRenderer.once("ws-error", (event, error) => {
+          appendLog("Error: " + error);
+          updateRowStatus("Error");
+        });
+
+        await ipcRenderer.invoke("connect-ws");
+        setIsConnected(true);
+        updateRowStatus("Connecting...");
+      } catch (error: any) {
+        console.error("Connection Error:", error);
+        appendLog(`Error: ${error.message || "Unknown error"}`);
+        updateRowStatus("Error");
+      }
+    }
+  };
+
+  const disconnect = async () => {
+    try {
+      // Remove all listeners to prevent duplicate events
+      ipcRenderer.removeAllListeners("ws-connected");
+      ipcRenderer.removeAllListeners("server-message");
+      ipcRenderer.removeAllListeners("ws-data");
+      ipcRenderer.removeAllListeners("ws-disconnected");
+      ipcRenderer.removeAllListeners("ws-error");
+
+      await ipcRenderer.invoke("disconnect-ws", inputs.ip, inputs.port);
+      appendLog("Disconnected successfully");
+      setIsConnected(false);
+      updateRowStatus("Disconnected");
+    } catch (error: any) {
+      console.error("Disconnection Error:", error);
+      appendLog(`Error: ${error.message || "Unknown error"}`);
+      updateRowStatus("Error");
+    }
+  };
+
+  const validateInputs = () => {
     const missingFields = [];
-    if (!inputs.ip) {
-      missingFields.push('IP Address');
-    }
-    if (!inputs.port) {
-      missingFields.push('Port');
-    }
-    if (!inputs.companyCode) {
-      missingFields.push('Company Code');
-    }
-    if (!inputs.environment) {
-      missingFields.push('Environment');
-    }
-    if (!inputs.instrumentType) {
-      missingFields.push('Instrument Type');
-    }
-    if (!inputs.instrumentId) {
-      missingFields.push('Instrument ID');
-    }
+    if (!inputs.ip) missingFields.push("IP Address");
+    if (!inputs.port) missingFields.push("Port");
+    if (!inputs.environment) missingFields.push("Environment");
+    if (!inputs.instrumentType) missingFields.push("Instrument Type");
+    if (!inputs.instrumentId) missingFields.push("Instrument ID");
+
     if (missingFields.length > 0) {
       alert(
-        `Please fill out the following fields:\n- ${missingFields.join('\n- ')}`
+        `Please fill out the following fields:\n- ${missingFields.join("\n- ")}`
       );
       return false;
     }
 
-    // Add a new row to the table
-    const tableBody = document.getElementById('logsTableBody');
-    const newRow = document.createElement('tr');
-    // Get the current time
-    const now = new Date();
-    const currentTime = now.toLocaleTimeString();
-    newRow.innerHTML = `
+    const tableBody = document.getElementById("logsTableBody") as HTMLElement;
+
+    // Check if a row for the same IP and Port already exists
+    const existingRow = Array.from(tableBody.children).find((row) => {
+      const cells = row.getElementsByTagName("td");
+      return (
+        cells[0].textContent === inputs.ip &&
+        cells[1].textContent === inputs.port
+      );
+    });
+
+    if (!existingRow) {
+      // Add a new row if it doesn't exist
+      const newRow = document.createElement("tr");
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString();
+
+      newRow.innerHTML = `
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs?.ip}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.port}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.companyCode}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.environment}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentType}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentId}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">
-          Progress
-        </td><td class="px-4 py-2 border border-gray-300 text-white text-center">
-    <i
-    class="fas fa-expand text-blue-500 cursor-pointer"
-    id="toggleModalIcon"
-    ></i></td>
-    <td class="px-4 py-2 border border-gray-300 text-white text-center">
-      ${currentTime}
-    </td>
-    `;
-    const toggleModalIcon = newRow.querySelector('#toggleModalIcon');
-    if (toggleModalIcon) {
-      toggleModalIcon.addEventListener('click', openMessageModal);
-    }
-    if (tableBody) {
+        <td class="px-4 py-2 border border-gray-300 text-white" id="status-${inputs.ip}-${inputs.port}">Connecting...</td>
+        <td class="px-4 py-2 border border-gray-300 text-white text-center">
+          <i
+          class="fas fa-expand text-blue-500 cursor-pointer"
+          id="toggleModalIcon"
+          ></i>
+        </td>
+        <td class="px-4 py-2 border border-gray-300 text-white text-center">
+          ${currentTime}
+        </td>
+      `;
+
+      const toggleModalIcon = newRow.querySelector("#toggleModalIcon");
+      if (toggleModalIcon) {
+        toggleModalIcon.addEventListener("click", openMessageModal);
+      }
+
       tableBody.appendChild(newRow);
-    } else {
-      console.error('Table body element not found');
     }
-    if (connectButton) {
-      connectButton.innerText = 'Disconnect';
-      connectButton.classList.add('bg-red-500'); // Change button color for Disconnect
-      connectButton.classList.remove('bg-blue-500');
+    return true;
+  };
+
+  const hexToASCII = (hexData: string) => {
+    let ascii = "";
+    for (let i = 0; i < hexData.length; i += 2) {
+      const byte = parseInt(hexData.substr(i, 2), 16);
+      if (byte >= 32 && byte <= 126) {
+        ascii += String.fromCharCode(byte);
+      }
     }
+    return ascii;
   };
 
   return (
@@ -287,7 +360,7 @@ const IntegrationGateway = observer(() => {
                       ...inputs,
                       environment,
                     });
-                    removeOptions(document.getElementById('intrumentType'));
+                    removeOptions(document.getElementById("intrumentType"));
                     integrationGatewayStore.integrationGatewayService.fetchInstrumentDetails(
                       {
                         companyCode: inputs?.companyCode,
@@ -358,12 +431,12 @@ const IntegrationGateway = observer(() => {
               <div className="space-x-4">
                 <button
                   id="connectButton"
-                  className="bg-blue-500 text-white px-6 py-2 text-sm rounded-md"
-                  onClick={() => {
-                    connect();
-                  }}
+                  onClick={handleConnection}
+                  className={`px-6 py-2 rounded-md ${
+                    isConnected ? "bg-red-500" : "bg-blue-500"
+                  } text-white`}
                 >
-                  Connect
+                  {isConnected ? "Disconnect" : "Connect"}
                 </button>
               </div>
             </div>
