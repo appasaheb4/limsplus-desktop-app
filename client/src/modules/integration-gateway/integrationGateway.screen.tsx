@@ -66,18 +66,18 @@ const IntegrationGateway = observer(() => {
     }
   };
 
-  const appendLog = (message: string) => {
+  function appendLog(message: string) {
     const logTextarea = document.getElementById(
       "secondSpaceContent"
     ) as HTMLTextAreaElement | null;
 
     if (logTextarea) {
-      logTextarea.value += message + "\n"; // Append message
-      logTextarea.scrollTop = logTextarea.scrollHeight; // Auto-scroll
+      logTextarea.value += `${message}\n`; // Append new message
+      logTextarea.scrollTop = logTextarea.scrollHeight; // Auto-scroll to bottom
     } else {
-      console.error('Textarea with ID "secondSpaceContent" not found');
+      console.error('Log text area with ID "secondSpaceContent" not found');
     }
-  };
+  }
 
   const handleConnection = async () => {
     let messageArray: string[] = [];
@@ -91,34 +91,61 @@ const IntegrationGateway = observer(() => {
         // Add event listeners
         ipcRenderer.once("ws-connected", (event, message) => {
           console.log(message);
-          appendLog(message);
+          appendLog(`WebSocket Connected: ${message}`);
           updateRowStatus("Connected");
           ipcRenderer.invoke("start-server", inputs.ip, inputs.port);
         });
 
-        ipcRenderer.once("server-message", (event, message) => {
-          appendLog(message);
+        ipcRenderer.on("server-message", (event, message) => {
+          appendLog(`Server Message: ${message}`);
         });
 
-        ipcRenderer.once("ws-data", (event, hexData) => {
-          console.log("Received WebSocket data:", hexData);
-          appendLog(hexData);
-          if (hexData === "04") {
-            const asciiData = hexToASCII(hexData);
+        ipcRenderer.on("ws-data", (event, hexData) => {
+          if (typeof hexData !== "string") {
+            console.error("Invalid data format received:", hexData);
+            return;
+          }
+
+          console.log("Original Data:", hexData);
+
+          // Normalize data by trimming and converting to lowercase
+          const normalizedData = hexData.trim().toLowerCase();
+          console.log("Normalized Data:", normalizedData);
+
+          // Convert hex to ASCII
+          const asciiData = hexToASCII(normalizedData);
+          console.log("ASCII Data:", asciiData);
+
+          // Prevent blank or invalid strings from being pushed
+          if (asciiData && asciiData.trim() !== "") {
             messageArray.push(asciiData);
-            appendLog(asciiData);
+            console.log("Pushed to messageArray:", asciiData);
+            appendLog(`Server Message: ${asciiData}`);
+          } else {
+            console.warn(
+              "Empty or invalid ASCII data, not pushing to array:",
+              asciiData
+            );
+          }
+
+          // Handle specific "04" case
+          if (normalizedData === "04") {
+            console.log("Special case '04' detected");
+            if (!messageArray.includes(asciiData)) {
+              messageArray.push("04"); // Ensure "04" gets pushed
+            }
             ipcRenderer.invoke("receivedMessage", messageArray);
           }
         });
 
         ipcRenderer.once("ws-disconnected", (event, message) => {
-          appendLog(message);
+          appendLog(`WebSocket Disconnected: ${message}`);
           updateRowStatus("Disconnected");
           setIsConnected(false);
         });
 
         ipcRenderer.once("ws-error", (event, error) => {
-          appendLog("Error: " + error);
+          appendLog(`WebSocket Error: ${error}`);
           updateRowStatus("Error");
         });
 
