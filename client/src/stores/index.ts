@@ -1,6 +1,6 @@
 import React from 'react';
-import {IntegrationGatewayStore} from '../modules/integration-gateway/store/integrationGateway.store';
-import {LoginStore} from '../modules/login/stores/login.store';
+import { IntegrationGatewayStore } from '../modules/integration-gateway/store/integrationGateway.store';
+import { LoginStore } from '../modules/login/stores/login.store';
 export class Stores {
   private isLoading: boolean;
   integrationGatewayStore: IntegrationGatewayStore;

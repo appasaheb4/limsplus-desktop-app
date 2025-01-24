@@ -1,6 +1,6 @@
-import {makeObservable, action, observable, computed} from 'mobx';
-import {IntegrationGateway} from '../models';
-import {IntegrationGatewayService} from '../services';
+import { makeObservable, action, observable, computed } from 'mobx';
+import { IntegrationGateway } from '../models';
+import { IntegrationGatewayService } from '../services';
 
 export class IntegrationGatewayStore {
   integrationGateway!: IntegrationGateway;

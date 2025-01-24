@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -117,7 +117,7 @@
       </div>
     </div>
     <script>
-      const {ipcRenderer} = require('electron');
+      const { ipcRenderer } = require('electron');
       ipcRenderer.invoke('read-user');
       ipcRenderer.on('send-user', (event, user) => {
         document.getElementById('userId').innerText = `Welcome ${user.userId}`;

@@ -3,7 +3,7 @@ export class LoginModel {
   username: string;
   password: string;
   lab: string;
-  constructor(rawData: {[key in string]: any}) {
+  constructor(rawData: { [key in string]: any }) {
     this.companyCode = rawData.companyCode;
     this.username = rawData.username;
     this.password = rawData.password;

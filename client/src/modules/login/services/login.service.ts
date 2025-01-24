@@ -1,10 +1,10 @@
-import {service} from '../../../core-services/rest-api';
-import {stores} from '../../../stores';
+import { service } from '../../../core-services/rest-api';
+import { stores } from '../../../stores';
 export class LoginService {
   async login(payload: any) {
     try {
       const result = await service
-        .post('/auth/login', {...payload})
+        .post('/auth/login', { ...payload })
         .then((response) => response.data);
       return result;
     } catch (error) {
@@ -26,7 +26,7 @@ export class LoginService {
   async userFindByFields(payload: any) {
     try {
       const result = await service
-        .post('/auth/userFindByFields', {...payload})
+        .post('/auth/userFindByFields', { ...payload })
         .then((response) => response.data);
       return result;
     } catch (error) {

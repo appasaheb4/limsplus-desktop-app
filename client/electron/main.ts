@@ -1,17 +1,17 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
-import * as path from "path";
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import * as path from 'path';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
 } from "electron-devtools-installer";
 
-const Store = require("./store.js");
-const MessageStore = require("./messageStore.js");
-const WebSocket = require("ws");
+const Store = require('./store.js');
+const MessageStore = require('./messageStore.js');
+const WebSocket = require('ws');
 
 // for file upload
-const fs = require("fs");
-const FormData = require("form-data");
-const { default: axios } = require("axios");
+const fs = require('fs');
+const FormData = require('form-data');
+const { default: axios } = require('axios');
 
 let mainWindow: any;
 // let childWindows = [];
