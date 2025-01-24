@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, shell} from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import * as path from 'path';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
@@ -10,7 +10,7 @@ const MessageStore = require('./messageStore.js');
 // for file upload
 const fs = require('fs');
 const FormData = require('form-data');
-const {default: axios} = require('axios');
+const { default: axios } = require('axios');
 
 let mainWindow: any;
 // let childWindows = [];

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -616,11 +616,11 @@
     </div>
 
     <script>
-      const {ipcRenderer} = require('electron');
+      const { ipcRenderer } = require('electron');
       const fs = require('fs');
       const path = require('path');
-      const {baseURL} = require('../../../env.js');
-      const {fetchCompanyList} = require('./integration-gateway.service.js');
+      const { baseURL } = require('../../../env.js');
+      const { fetchCompanyList } = require('./integration-gateway.service.js');
       document.addEventListener('DOMContentLoaded', () => {
         fetchCompanyList();
       });
@@ -830,8 +830,8 @@
           if (missingFields.length > 0) {
             alert(
               `Please fill out the following fields:\n- ${missingFields.join(
-                '\n- '
-              )}`
+                '\n- ',
+              )}`,
             );
             return false;
           }

@@ -1,6 +1,6 @@
-import {makeObservable, action, observable, computed} from 'mobx';
-import {LoginModel} from '../models';
-import {LoginService} from '../services';
+import { makeObservable, action, observable, computed } from 'mobx';
+import { LoginModel } from '../models';
+import { LoginService } from '../services';
 
 export class LoginStore {
   login!: LoginModel;

@@ -1,5 +1,5 @@
 // filepath: /Users/appasaheb4/Documents/project/electon/limsplus-desktop-app/client/src/components/DigitalClock.tsx
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import './style.css';
 
 export const DigitalClock: React.FC = () => {
@@ -20,5 +20,5 @@ export const DigitalClock: React.FC = () => {
     return `${hours}:${minutes}:${seconds}`;
   };
 
-  return <div className="digital-clock">{formatTime(time)}</div>;
+  return <div className='digital-clock'>{formatTime(time)}</div>;
 };

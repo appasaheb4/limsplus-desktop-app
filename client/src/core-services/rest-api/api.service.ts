@@ -1,7 +1,7 @@
-import Axios, {AxiosInstance, AxiosRequestConfig, AxiosResponse} from 'axios';
+import Axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import _ from 'lodash';
-import {ServiceResponse} from './response-handle.service';
-import {stores} from '../../stores';
+import { ServiceResponse } from './response-handle.service';
+import { stores } from '../../stores';
 
 const headers: Readonly<Record<string, string | boolean>> = {
   Accept: 'application/json',
@@ -45,13 +45,13 @@ export class Service {
       },
       (error) => {
         stores.setLoading(false);
-        const {response} = error;
+        const { response } = error;
         if (!response) {
           return Promise.reject({
             status: 500,
           });
         }
-      }
+      },
     );
 
     service.interceptors.response.use(
@@ -61,7 +61,7 @@ export class Service {
       },
       (error) => {
         stores.setLoading(false);
-        const {response} = error;
+        const { response } = error;
         if (Axios.isCancel(error)) {
           return Promise.reject({
             status: 408,
@@ -71,22 +71,22 @@ export class Service {
             status: 500,
           });
         }
-        const {data: errorMessage} = response;
+        const { data: errorMessage } = response;
         return errorMessage;
-      }
+      },
     );
     return service;
   }
 
   request<T = any, R = AxiosResponse<T>>(
-    config: AxiosRequestConfig
+    config: AxiosRequestConfig,
   ): Promise<R> {
     return this.service.request<T, R>(config);
   }
 
   get<T = any, R = AxiosResponse<T>>(
     url: string,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<R> {
     return this.service.get<T, R>(url, config);
   }
@@ -94,7 +94,7 @@ export class Service {
   post<T = any, R = AxiosResponse<T>>(
     url: string,
     data?: T,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<R> {
     return this.service.post<T, R>(url, data, config);
   }
@@ -102,31 +102,31 @@ export class Service {
   put<T = any, R = AxiosResponse<T>>(
     url: string,
     data?: T,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<R> {
     return this.service.put<T, R>(url, data, config);
   }
 
   delete<T = any, R = AxiosResponse<T>>(
     url: string,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<R> {
     return this.service.delete<T, R>(url, config);
   }
 
   static handleResponse<T>(
     response: AxiosResponse,
-    Type?: {new (...args: any): T},
-    path?: string
+    Type?: { new (...args: any): T },
+    path?: string,
   ): ServiceResponse<T> {
     if (response?.data?.successful_response) {
       // API Success
-      const {error, successful_response, data} = response.data;
+      const { error, successful_response, data } = response.data;
       const strippedResponse = path ? _.get(data, path) : data;
       return new ServiceResponse<T>(
         successful_response ? 1 : 0, // 1= Success, 0= Failure,
         error?.message || '',
-        Type ? new Type(strippedResponse) : strippedResponse
+        Type ? new Type(strippedResponse) : strippedResponse,
       );
     }
 
@@ -143,11 +143,11 @@ export class Service {
     // eslint-disable-next-line no-prototype-builtins
     if (response?.data?.status === 'error') {
       // API Error with error object
-      const {error, successful_response} = response.data;
+      const { error, successful_response } = response.data;
       return new ServiceResponse<T>(
         successful_response ? 1 : 0, // 1= Success, 0= Failure,
         error?.message || '',
-        error
+        error,
       );
     }
     // Service function error
@@ -165,6 +165,6 @@ const getBaseUrl = (env: string): string => {
   }
 };
 export const service = new Service(
-  getBaseUrl(process.env.REACT_APP_ENV || 'Local')
+  getBaseUrl(process.env.REACT_APP_ENV || 'Local'),
 );
 export const serviceLocal = new Service('http://localhost:8080/api/');

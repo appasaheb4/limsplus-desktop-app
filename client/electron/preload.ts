@@ -1,4 +1,4 @@
-const {contextBridge, ipcRenderer} = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   connectWS: (ip: string, port: any) =>
@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   onWSError: (callback: any) =>
     ipcRenderer.on('ws-error', (event, data) => callback(data)),
   saveData: (username: any) => {
-    let data = {username};
+    let data = { username };
     console.log(data);
   },
 });

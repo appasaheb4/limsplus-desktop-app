@@ -5,15 +5,15 @@ import {
   from,
   ApolloLink,
 } from '@apollo/client';
-import {onError} from '@apollo/client/link/error';
-import {stores} from '@/stores';
-import {setContext} from '@apollo/client/link/context';
-import {createUploadLink} from 'apollo-upload-client';
+import { onError } from '@apollo/client/link/error';
+import { stores } from '@/stores';
+import { setContext } from '@apollo/client/link/context';
+import { createUploadLink } from 'apollo-upload-client';
 
 let apiCount = 0;
 const customFetch = async (
   uri: RequestInfo | URL,
-  options: any
+  options: any,
 ): Promise<any> => {
   try {
     apiCount++;
@@ -50,7 +50,7 @@ const getBaseUrl = (env: string) => {
   }
 };
 
-const authLink = setContext(async (_, {headers}) => {
+const authLink = setContext(async (_, { headers }) => {
   return {
     headers: {
       ...headers,
@@ -61,7 +61,7 @@ const authLink = setContext(async (_, {headers}) => {
 
 const authMiddleware = new ApolloLink((operation, forward) => {
   // add the authorization to the headers
-  operation.setContext(({headers = {}}) => ({
+  operation.setContext(({ headers = {} }) => ({
     headers: {
       ...headers,
       Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -80,11 +80,11 @@ const UploadLinkLocal = createUploadLink({
   fetch: customFetch,
 });
 
-const errorLink = onError(({graphQLErrors, networkError}) => {
+const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (graphQLErrors) {
-    graphQLErrors.forEach(({message, locations, path, extensions}: any) => {
+    graphQLErrors.forEach(({ message, locations, path, extensions }: any) => {
       console.log(
-        `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
+        `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`,
       );
       if (extensions && extensions.validation) {
         const firstMessageKey = Object.keys(extensions.validation)[0];
@@ -110,4 +110,4 @@ export const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
-export {ApolloProvider};
+export { ApolloProvider };

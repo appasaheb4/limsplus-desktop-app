@@ -1,5 +1,5 @@
-const {ipcRenderer} = require('electron');
-const {baseURL} = require('../../../env.js');
+const { ipcRenderer } = require('electron');
+const { baseURL } = require('../../../env.js');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data'); // For handling multipart/form-data
@@ -19,7 +19,7 @@ function fetchCompanyList() {
       }
     })
     .catch((error) => {
-      console.log({error});
+      console.log({ error });
     });
 }
 // fetch instrument details
@@ -71,7 +71,7 @@ function fetchInstrumentDetails(payload) {
         }
       })
       .catch((error) => {
-        console.log({error});
+        console.log({ error });
       });
   }
 }
@@ -127,4 +127,4 @@ function uploadLogsFile() {
   // } catch (error) {}
 }
 
-module.exports = {fetchCompanyList, fetchInstrumentDetails, uploadLogsFile};
+module.exports = { fetchCompanyList, fetchInstrumentDetails, uploadLogsFile };

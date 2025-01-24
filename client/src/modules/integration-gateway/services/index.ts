@@ -1,10 +1,10 @@
-import {service} from '../../../core-services/rest-api';
-import {stores} from '../../../stores';
+import { service } from '../../../core-services/rest-api';
+import { stores } from '../../../stores';
 export class IntegrationGatewayService {
   async fetchEnvironment(payload: any) {
     try {
       const result = await service
-        .post('/company/companyFindByFields', {...payload})
+        .post('/company/companyFindByFields', { ...payload })
         .then((response) => response.data);
       if (result?.success) {
         stores.integrationGatewayStore.updateIntegrationGateway({
@@ -21,7 +21,7 @@ export class IntegrationGatewayService {
   async fetchInstrumentDetails(payload: any) {
     try {
       const result = await service
-        .post('/communication/instrumentTypeList', {...payload})
+        .post('/communication/instrumentTypeList', { ...payload })
         .then((response) => response.data);
       if (result?.success) {
         stores.integrationGatewayStore.updateIntegrationGateway({
