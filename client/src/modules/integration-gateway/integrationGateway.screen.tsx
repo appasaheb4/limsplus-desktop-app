@@ -6,12 +6,12 @@ const { ipcRenderer } = window.require('electron');
 const IntegrationGateway = observer(() => {
   const { integrationGatewayStore } = useStores();
   const [inputs, setInputs] = useState({
-    ip: "127.0.0.1",
-    port: "8080",
-    companyCode: "",
-    environment: "",
-    instrumentType: "",
-    instrumentId: "",
+    ip: '127.0.0.1',
+    port: '8080',
+    companyCode: '',
+    environment: '',
+    instrumentType: '',
+    instrumentId: '',
   });
   const [isConnected, setIsConnected] = useState(false);
 
@@ -24,8 +24,8 @@ const IntegrationGateway = observer(() => {
   }
 
   useEffect(() => {
-    ipcRenderer.invoke("read-user");
-    ipcRenderer.on("send-user", (event, user) => {
+    ipcRenderer.invoke('read-user');
+    ipcRenderer.on('send-user', (event, user) => {
       setInputs({
         ...inputs,
         companyCode: user.companyCode,
@@ -34,41 +34,41 @@ const IntegrationGateway = observer(() => {
         code: user.companyCode,
       });
     });
-    ipcRenderer.send("set-title", "Integration Gateway");
+    ipcRenderer.send('set-title', 'Integration Gateway');
   }, []);
 
   const openMessageModal = () => {
-    const modal = document.getElementById("messageModal");
+    const modal = document.getElementById('messageModal');
     if (modal) {
-      modal.classList.remove("hidden");
-      modal.style.display = "flex";
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
     } else {
-      console.error("Modal element not found");
+      console.error('Modal element not found');
     }
   };
 
   function closeMessageModal() {
-    const modal = document.getElementById("messageModal");
+    const modal = document.getElementById('messageModal');
     if (modal) {
-      modal.style.display = "none";
-      modal.classList.add("hidden");
+      modal.style.display = 'none';
+      modal.classList.add('hidden');
     }
   }
 
   const updateRowStatus = (status: string) => {
     const statusCell = document.getElementById(
-      `status-${inputs.ip}-${inputs.port}`
+      `status-${inputs.ip}-${inputs.port}`,
     );
     if (statusCell) {
       statusCell.textContent = status;
     } else {
-      console.error("Status cell not found for the given IP and Port");
+      console.error('Status cell not found for the given IP and Port');
     }
   };
 
   function appendLog(message: string) {
     const logTextarea = document.getElementById(
-      "secondSpaceContent"
+      'secondSpaceContent',
     ) as HTMLTextAreaElement | null;
 
     if (logTextarea) {
@@ -89,73 +89,73 @@ const IntegrationGateway = observer(() => {
     } else {
       try {
         // Add event listeners
-        ipcRenderer.once("ws-connected", (event, message) => {
+        ipcRenderer.once('ws-connected', (event, message) => {
           console.log(message);
           appendLog(`WebSocket Connected: ${message}`);
-          updateRowStatus("Connected");
-          ipcRenderer.invoke("start-server", inputs.ip, inputs.port);
+          updateRowStatus('Connected');
+          ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
         });
 
-        ipcRenderer.on("server-message", (event, message) => {
+        ipcRenderer.on('server-message', (event, message) => {
           appendLog(`Server Message: ${message}`);
         });
 
-        ipcRenderer.on("ws-data", (event, hexData) => {
-          if (typeof hexData !== "string") {
-            console.error("Invalid data format received:", hexData);
+        ipcRenderer.on('ws-data', (event, hexData) => {
+          if (typeof hexData !== 'string') {
+            console.error('Invalid data format received:', hexData);
             return;
           }
 
-          console.log("Original Data:", hexData);
+          console.log('Original Data:', hexData);
 
           // Normalize data by trimming and converting to lowercase
           const normalizedData = hexData.trim().toLowerCase();
-          console.log("Normalized Data:", normalizedData);
+          console.log('Normalized Data:', normalizedData);
 
           // Convert hex to ASCII
           const asciiData = hexToASCII(normalizedData);
-          console.log("ASCII Data:", asciiData);
+          console.log('ASCII Data:', asciiData);
 
           // Prevent blank or invalid strings from being pushed
-          if (asciiData && asciiData.trim() !== "") {
+          if (asciiData && asciiData.trim() !== '') {
             messageArray.push(asciiData);
-            console.log("Pushed to messageArray:", asciiData);
+            console.log('Pushed to messageArray:', asciiData);
             appendLog(`Server Message: ${asciiData}`);
           } else {
             console.warn(
-              "Empty or invalid ASCII data, not pushing to array:",
-              asciiData
+              'Empty or invalid ASCII data, not pushing to array:',
+              asciiData,
             );
           }
 
           // Handle specific "04" case
-          if (normalizedData === "04") {
+          if (normalizedData === '04') {
             console.log("Special case '04' detected");
             if (!messageArray.includes(asciiData)) {
-              messageArray.push("04"); // Ensure "04" gets pushed
+              messageArray.push('04'); // Ensure "04" gets pushed
             }
-            ipcRenderer.invoke("receivedMessage", messageArray);
+            ipcRenderer.invoke('receivedMessage', messageArray);
           }
         });
 
-        ipcRenderer.once("ws-disconnected", (event, message) => {
+        ipcRenderer.once('ws-disconnected', (event, message) => {
           appendLog(`WebSocket Disconnected: ${message}`);
-          updateRowStatus("Disconnected");
+          updateRowStatus('Disconnected');
           setIsConnected(false);
         });
 
-        ipcRenderer.once("ws-error", (event, error) => {
+        ipcRenderer.once('ws-error', (event, error) => {
           appendLog(`WebSocket Error: ${error}`);
-          updateRowStatus("Error");
+          updateRowStatus('Error');
         });
 
-        await ipcRenderer.invoke("connect-ws");
+        await ipcRenderer.invoke('connect-ws');
         setIsConnected(true);
-        updateRowStatus("Connecting...");
+        updateRowStatus('Connecting...');
       } catch (error: any) {
-        console.error("Connection Error:", error);
-        appendLog(`Error: ${error.message || "Unknown error"}`);
-        updateRowStatus("Error");
+        console.error('Connection Error:', error);
+        appendLog(`Error: ${error.message || 'Unknown error'}`);
+        updateRowStatus('Error');
       }
     }
   };
@@ -163,30 +163,30 @@ const IntegrationGateway = observer(() => {
   const disconnect = async () => {
     try {
       // Remove all listeners to prevent duplicate events
-      ipcRenderer.removeAllListeners("ws-connected");
-      ipcRenderer.removeAllListeners("server-message");
-      ipcRenderer.removeAllListeners("ws-data");
-      ipcRenderer.removeAllListeners("ws-disconnected");
-      ipcRenderer.removeAllListeners("ws-error");
+      ipcRenderer.removeAllListeners('ws-connected');
+      ipcRenderer.removeAllListeners('server-message');
+      ipcRenderer.removeAllListeners('ws-data');
+      ipcRenderer.removeAllListeners('ws-disconnected');
+      ipcRenderer.removeAllListeners('ws-error');
 
-      await ipcRenderer.invoke("disconnect-ws", inputs.ip, inputs.port);
-      appendLog("Disconnected successfully");
+      await ipcRenderer.invoke('disconnect-ws', inputs.ip, inputs.port);
+      appendLog('Disconnected successfully');
       setIsConnected(false);
-      updateRowStatus("Disconnected");
+      updateRowStatus('Disconnected');
     } catch (error: any) {
-      console.error("Disconnection Error:", error);
-      appendLog(`Error: ${error.message || "Unknown error"}`);
-      updateRowStatus("Error");
+      console.error('Disconnection Error:', error);
+      appendLog(`Error: ${error.message || 'Unknown error'}`);
+      updateRowStatus('Error');
     }
   };
 
   const validateInputs = () => {
     const missingFields = [];
-    if (!inputs.ip) missingFields.push("IP Address");
-    if (!inputs.port) missingFields.push("Port");
-    if (!inputs.environment) missingFields.push("Environment");
-    if (!inputs.instrumentType) missingFields.push("Instrument Type");
-    if (!inputs.instrumentId) missingFields.push("Instrument ID");
+    if (!inputs.ip) missingFields.push('IP Address');
+    if (!inputs.port) missingFields.push('Port');
+    if (!inputs.environment) missingFields.push('Environment');
+    if (!inputs.instrumentType) missingFields.push('Instrument Type');
+    if (!inputs.instrumentId) missingFields.push('Instrument ID');
 
     if (missingFields.length > 0) {
       alert(
@@ -195,11 +195,11 @@ const IntegrationGateway = observer(() => {
       return false;
     }
 
-    const tableBody = document.getElementById("logsTableBody") as HTMLElement;
+    const tableBody = document.getElementById('logsTableBody') as HTMLElement;
 
     // Check if a row for the same IP and Port already exists
     const existingRow = Array.from(tableBody.children).find((row) => {
-      const cells = row.getElementsByTagName("td");
+      const cells = row.getElementsByTagName('td');
       return (
         cells[0].textContent === inputs.ip &&
         cells[1].textContent === inputs.port
@@ -208,7 +208,7 @@ const IntegrationGateway = observer(() => {
 
     if (!existingRow) {
       // Add a new row if it doesn't exist
-      const newRow = document.createElement("tr");
+      const newRow = document.createElement('tr');
       const now = new Date();
       const currentTime = now.toLocaleTimeString();
 
@@ -231,9 +231,9 @@ const IntegrationGateway = observer(() => {
         </td>
       `;
 
-      const toggleModalIcon = newRow.querySelector("#toggleModalIcon");
+      const toggleModalIcon = newRow.querySelector('#toggleModalIcon');
       if (toggleModalIcon) {
-        toggleModalIcon.addEventListener("click", openMessageModal);
+        toggleModalIcon.addEventListener('click', openMessageModal);
       }
 
       tableBody.appendChild(newRow);
@@ -242,7 +242,7 @@ const IntegrationGateway = observer(() => {
   };
 
   const hexToASCII = (hexData: string) => {
-    let ascii = "";
+    let ascii = '';
     for (let i = 0; i < hexData.length; i += 2) {
       const byte = parseInt(hexData.substr(i, 2), 16);
       if (byte >= 32 && byte <= 126) {
@@ -387,7 +387,7 @@ const IntegrationGateway = observer(() => {
                       ...inputs,
                       environment,
                     });
-                    removeOptions(document.getElementById("intrumentType"));
+                    removeOptions(document.getElementById('intrumentType'));
                     integrationGatewayStore.integrationGatewayService.fetchInstrumentDetails(
                       {
                         companyCode: inputs?.companyCode,
@@ -457,13 +457,13 @@ const IntegrationGateway = observer(() => {
             <div className='flex mt-6 gap-2'>
               <div className='space-x-4'>
                 <button
-                  id="connectButton"
+                  id='connectButton'
                   onClick={handleConnection}
                   className={`px-6 py-2 rounded-md ${
-                    isConnected ? "bg-red-500" : "bg-blue-500"
+                    isConnected ? 'bg-red-500' : 'bg-blue-500'
                   } text-white`}
                 >
-                  {isConnected ? "Disconnect" : "Connect"}
+                  {isConnected ? 'Disconnect' : 'Connect'}
                 </button>
               </div>
             </div>
