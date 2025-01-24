@@ -203,14 +203,11 @@ ipcMain.handle('get-user-data-path', () => {
 
 ipcMain.handle('start-server', async (event, ip, tcpPort) => {
   try {
-    console.log(`Starting server on ${ip}:${tcpPort}`);
     const response = await axios.get(
       `http://localhost:9000/start-tcp?ip=${ip}&tcpPort=${tcpPort}`,
     );
-    console.log('Server started:', response.data);
     event.sender.send('server-message', response.data);
   } catch (error: any) {
-    console.error('Error starting server:', error.message);
     event.sender.send(
       'server-message',
       `Error starting server: ${error.message}`,
@@ -220,33 +217,22 @@ ipcMain.handle('start-server', async (event, ip, tcpPort) => {
 
 ipcMain.handle('connect-ws', (event) => {
   const wsUrl = `ws://localhost:6000/ws`;
-  console.log('Connecting to WebSocket URL:', wsUrl);
-
-  // if (ws) {
-  //   ws.close();
-  //   ws = null;
-  // }
-
   let ws = new WebSocket(wsUrl);
 
   ws.on('open', () => {
-    console.log('WebSocket connected');
     event.sender.send('ws-connected', 'WebSocket connection established');
   });
 
   ws.on('message', (data: any) => {
-    console.log('Received WebSocket data:', data.toString());
     event.sender.send('ws-data', data.toString());
   });
 
   ws.on('close', () => {
-    console.log('WebSocket disconnected');
     event.sender.send('ws-disconnected', 'WebSocket connection closed');
     ws = null;
   });
 
   ws.on('error', (error: any) => {
-    console.error('WebSocket error:', error.message);
     event.sender.send('ws-error', error.message);
   });
 });
@@ -279,7 +265,6 @@ ipcMain.handle('disconnect-ws', async (event, ip, tcpPort) => {
 ipcMain.handle('send-ws', (event, message) => {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(message);
-    console.log('Message sent:', message);
   } else {
     event.sender.send('ws-error', 'WebSocket is not connected');
   }

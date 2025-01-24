@@ -90,7 +90,6 @@ const IntegrationGateway = observer(() => {
       try {
         // Add event listeners
         ipcRenderer.once('ws-connected', (event, message) => {
-          console.log(message);
           appendLog(`WebSocket Connected: ${message}`);
           updateRowStatus('Connected');
           ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
@@ -106,20 +105,20 @@ const IntegrationGateway = observer(() => {
             return;
           }
 
-          console.log('Original Data:', hexData);
-
           // Normalize data by trimming and converting to lowercase
           const normalizedData = hexData.trim().toLowerCase();
-          console.log('Normalized Data:', normalizedData);
-
           // Convert hex to ASCII
           const asciiData = hexToASCII(normalizedData);
-          console.log('ASCII Data:', asciiData);
 
+          // Server  Send ENQ Store In Array(Hex value) 05
+          if (normalizedData === '05') {
+            if (!messageArray.includes(asciiData)) {
+              messageArray.push('05');
+            }
+          }
           // Prevent blank or invalid strings from being pushed
           if (asciiData && asciiData.trim() !== '') {
             messageArray.push(asciiData);
-            console.log('Pushed to messageArray:', asciiData);
             appendLog(`Server Message: ${asciiData}`);
           } else {
             console.warn(
@@ -128,11 +127,10 @@ const IntegrationGateway = observer(() => {
             );
           }
 
-          // Handle specific "04" case
+          // Handle specific "04" case EOT
           if (normalizedData === '04') {
-            console.log("Special case '04' detected");
             if (!messageArray.includes(asciiData)) {
-              messageArray.push('04'); // Ensure "04" gets pushed
+              messageArray.push('04');
             }
             ipcRenderer.invoke('receivedMessage', messageArray);
           }
@@ -153,7 +151,6 @@ const IntegrationGateway = observer(() => {
         setIsConnected(true);
         updateRowStatus('Connecting...');
       } catch (error: any) {
-        console.error('Connection Error:', error);
         appendLog(`Error: ${error.message || 'Unknown error'}`);
         updateRowStatus('Error');
       }
