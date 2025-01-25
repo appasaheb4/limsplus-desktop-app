@@ -63,29 +63,31 @@ const Login = observer(() => {
             type='text'
             id='username'
             placeholder='Username'
+            value={loginStore.login.username?.toUpperCase()}
             className='w-60 px-2 py-2 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent'
             required
             onChange={(e) => {
               const username = e.target.value;
               loginStore.updateLogin({
                 ...loginStore.login,
-                username,
+                username: username?.toUpperCase(),
               });
             }}
             onBlur={(e) => {
               const username = e.target.value;
-              loginStore.loginService
-                .userFindByFields({
-                  username,
-                  companyCode: loginStore.login.companyCode,
-                })
-                .then((response: any) => {
-                  if (response?.success) {
-                    loginStore.updateLabList(response?.user?.lab);
-                  } else {
-                    alert(response?.message);
-                  }
-                });
+              if (username)
+                loginStore.loginService
+                  .userFindByFields({
+                    username: username?.toUpperCase(),
+                    companyCode: loginStore.login.companyCode,
+                  })
+                  .then((response: any) => {
+                    if (response?.success) {
+                      loginStore.updateLabList(response?.user?.lab);
+                    } else {
+                      alert(response?.message);
+                    }
+                  });
             }}
           />
         </div>

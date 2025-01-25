@@ -53,6 +53,11 @@ const Home = observer(() => {
             <button
               className='item'
               onClick={() => {
+                // ipcRenderer.send(
+                //   'navigate-to-iframe-screen',
+                //   'https://demo.limsplussolutions.com',
+                //   'LimsPlus Lite',
+                // );
                 ipcRenderer.send(
                   'navigate-to-iframe-screen',
                   integrationGatewayStore.integrationGateway.companyDetails
