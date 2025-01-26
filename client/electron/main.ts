@@ -100,7 +100,6 @@ app.whenReady().then(() => {
 });
 
 ipcMain.on('navigate-to-integration-gateway', (event, route) => {
-  // Create the child window for integration gateway
   childWindows = new BrowserWindow({
     parent: mainWindow,
     alwaysOnTop: true,
@@ -125,12 +124,21 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     childWindows.show();
   });
 
-  // Start the Go server when the `integration-gateway` window is created
-  const serverPath = path.join(
-    __dirname,
-    'server/bin',
-    process.platform === 'win32' ? 'server.exe' : 'server',
-  );
+  // Start the Go server
+  const serverPath = isDev
+    ? path.join(
+        __dirname, // Development mode: relative to `electron/`
+        'server',
+        process.platform === 'win32' ? 'server.exe' : 'server',
+      )
+    : path.join(
+        process.resourcesPath, // Production mode: packaged app's resources folder
+        'server',
+        process.platform === 'win32' ? 'server.exe' : 'server',
+      );
+
+  console.log('Resolved Go server path:', serverPath); // Debug the resolved path
+
   goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
 
   goServerProcess.on('error', (err: any) => {
@@ -141,7 +149,7 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     console.log(`Go server exited with code ${code}`);
   });
 
-  // Stop the Go server when the `integration-gateway` window is closed
+  // Stop the Go server when the window is closed
   childWindows.on('closed', () => {
     if (goServerProcess) {
       goServerProcess.kill();
@@ -253,34 +261,49 @@ ipcMain.handle('start-server', async (event, ip, tcpPort) => {
     const response = await axios.get(
       `http://localhost:9000/start-tcp?ip=${ip}&tcpPort=${tcpPort}`,
     );
-    event.sender.send('server-message', response.data);
+
+    // Ensure the sender is still valid before sending a response
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('server-message', response.data);
+    }
   } catch (error: any) {
-    event.sender.send(
-      'server-message',
-      `Error starting server: ${error.message}`,
-    );
+    // Ensure the sender is still valid before sending an error response
+    if (!event.sender.isDestroyed()) {
+      event.sender.send(
+        'server-message',
+        `Error starting server: ${error.message}`,
+      );
+    }
+    console.error('Error occurred while starting server:', error.message);
   }
 });
 
 ipcMain.handle('connect-ws', (event) => {
   const wsUrl = `ws://localhost:6000/ws`;
-  let ws = new WebSocket(wsUrl);
+  const ws = new WebSocket(wsUrl);
 
   ws.on('open', () => {
-    event.sender.send('ws-connected', 'WebSocket connection established');
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-connected', 'WebSocket connection established');
+    }
   });
 
   ws.on('message', (data: any) => {
-    event.sender.send('ws-data', data.toString());
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-data', data.toString());
+    }
   });
 
   ws.on('close', () => {
-    event.sender.send('ws-disconnected', 'WebSocket connection closed');
-    ws = null;
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-disconnected', 'WebSocket connection closed');
+    }
   });
 
   ws.on('error', (error: any) => {
-    event.sender.send('ws-error', error.message);
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-error', error.message);
+    }
   });
 });
 
