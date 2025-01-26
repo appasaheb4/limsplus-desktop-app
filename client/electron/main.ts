@@ -65,22 +65,6 @@ function createWindow() {
     });
   }
 
-  // Start Go server
-  const serverPath = path.join(
-    __dirname,
-    'server/bin',
-    process.platform === 'win32' ? 'server.exe' : 'server',
-  );
-  goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
-
-  goServerProcess.on('error', (err: any) => {
-    console.error('Failed to start Go server:', err);
-  });
-
-  goServerProcess.on('exit', (code: any) => {
-    console.log(`Go server exited with code ${code}`);
-  });
-
   if (isDev) {
     mainWindow.webContents.openDevTools();
     mainWindow.loadURL('http://localhost:3000');
@@ -116,6 +100,7 @@ app.whenReady().then(() => {
 });
 
 ipcMain.on('navigate-to-integration-gateway', (event, route) => {
+  // Create the child window for integration gateway
   childWindows = new BrowserWindow({
     parent: mainWindow,
     alwaysOnTop: true,
@@ -125,6 +110,7 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       contextIsolation: false,
     },
   });
+
   if (isDev) {
     childWindows.webContents.openDevTools();
     childWindows.loadURL(`http://localhost:3000/#${route}`);
@@ -133,9 +119,38 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       hash: route,
     });
   }
+
   childWindows.once('ready-to-show', () => {
     childWindows.maximize();
     childWindows.show();
+  });
+
+  // Start the Go server when the `integration-gateway` window is created
+  const serverPath = path.join(
+    __dirname,
+    'server/bin',
+    process.platform === 'win32' ? 'server.exe' : 'server',
+  );
+  goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
+
+  goServerProcess.on('error', (err: any) => {
+    console.error('Failed to start Go server:', err);
+  });
+
+  goServerProcess.on('exit', (code: any) => {
+    console.log(`Go server exited with code ${code}`);
+  });
+
+  // Stop the Go server when the `integration-gateway` window is closed
+  childWindows.on('closed', () => {
+    if (goServerProcess) {
+      goServerProcess.kill();
+      goServerProcess = null;
+      console.log(
+        'Go server stopped because the integration-gateway screen was closed.',
+      );
+    }
+    childWindows = null;
   });
 });
 
