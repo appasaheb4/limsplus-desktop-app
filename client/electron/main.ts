@@ -6,7 +6,10 @@ import installExtension, {
 
 const Store = require('./store.js');
 const MessageStore = require('./messageStore.js');
+const InstrumentLogsStore = require('./instrumentLogsStore');
 const WebSocket = require('ws');
+const { spawn } = require('child_process');
+let goServerProcess: any = null;
 
 // for file upload
 const fs = require('fs');
@@ -37,6 +40,10 @@ const messageStore = new MessageStore({
   },
 });
 
+const instrumentLogStore = new InstrumentLogsStore({
+  configName: 'instrument-logs',
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
@@ -50,12 +57,29 @@ function createWindow() {
       contextIsolation: false,
     },
   });
+
   const user = store.get('user');
   if (user?.userId) {
     mainWindow.webContents.on('did-finish-load', () => {
       mainWindow.webContents.send('user', user);
     });
   }
+
+  // Start Go server
+  const serverPath = path.join(
+    __dirname,
+    'server/bin',
+    process.platform === 'win32' ? 'server.exe' : 'server',
+  );
+  goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
+
+  goServerProcess.on('error', (err: any) => {
+    console.error('Failed to start Go server:', err);
+  });
+
+  goServerProcess.on('exit', (code: any) => {
+    console.log(`Go server exited with code ${code}`);
+  });
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
@@ -81,6 +105,10 @@ app.whenReady().then(() => {
   //   }
   // });
   app.on('window-all-closed', () => {
+    if (goServerProcess) {
+      goServerProcess.kill();
+      goServerProcess = null;
+    }
     if (process.platform !== 'darwin') {
       app.quit();
     }
@@ -153,11 +181,15 @@ ipcMain.handle('read-companyList', (event) => {
 });
 
 ipcMain.handle('receivedMessage', async (event, payload) => {
-  await messageStore.set('receivedMessage', payload);
-  event.sender.send('stored-received-message');
-  // .then(() => {
-  //   event.sender.send('stored-received-message');
-  // });
+  if (payload && Array.isArray(payload)) {
+    await messageStore.set('receivedMessage', payload);
+    event.sender.send('stored-received-message');
+    await instrumentLogStore.appendLog(payload);
+  } else {
+    console.error(
+      'Invalid payload: `receivedMessage` must be an array of strings.',
+    );
+  }
 });
 
 ipcMain.on('file:upload', async (event, opt: any) => {

@@ -113,6 +113,7 @@ const IntegrationGateway = observer(() => {
           // Server  Send ENQ Store In Array(Hex value) 05
           if (normalizedData === '05') {
             if (!messageArray.includes(asciiData)) {
+              appendLog(`Server Message: 05`);
               messageArray.push('05');
             }
           }
@@ -130,6 +131,7 @@ const IntegrationGateway = observer(() => {
           // Handle specific "04" case EOT
           if (normalizedData === '04') {
             if (!messageArray.includes(asciiData)) {
+              appendLog(`Server Message: 04`);
               messageArray.push('04');
             }
             ipcRenderer.invoke('receivedMessage', messageArray);
