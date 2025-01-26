@@ -57,7 +57,6 @@ function createWindow() {
       contextIsolation: false,
     },
   });
-
   const user = store.get('user');
   if (user?.userId) {
     mainWindow.webContents.on('did-finish-load', () => {
@@ -109,7 +108,6 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       contextIsolation: false,
     },
   });
-
   if (isDev) {
     childWindows.webContents.openDevTools();
     childWindows.loadURL(`http://localhost:3000/#${route}`);
@@ -118,7 +116,6 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
       hash: route,
     });
   }
-
   childWindows.once('ready-to-show', () => {
     childWindows.maximize();
     childWindows.show();

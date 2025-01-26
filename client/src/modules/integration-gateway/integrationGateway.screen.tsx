@@ -183,6 +183,7 @@ const IntegrationGateway = observer(() => {
     const missingFields = [];
     if (!inputs.ip) missingFields.push('IP Address');
     if (!inputs.port) missingFields.push('Port');
+    if (!inputs.companyCode) missingFields.push('Company Code');
     if (!inputs.environment) missingFields.push('Environment');
     if (!inputs.instrumentType) missingFields.push('Instrument Type');
     if (!inputs.instrumentId) missingFields.push('Instrument ID');
