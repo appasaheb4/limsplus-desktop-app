@@ -134,8 +134,6 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
         process.platform === 'win32' ? 'server.exe' : 'server',
       );
 
-  console.log('Resolved Go server path:', serverPath); // Debug the resolved path
-
   goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
 
   goServerProcess.on('error', (err: any) => {
