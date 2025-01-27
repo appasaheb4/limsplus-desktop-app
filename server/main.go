@@ -144,19 +144,19 @@ func handleTCPConnection(conn net.Conn, messages chan<- string) {
 		// broadcastToWebSocketClients(message)
 		messages <- fmt.Sprintf("TCP Received: %s\n", message)
 
-		// if hexData == "05" {
-		// 	sendMessage(conn, "06")
-		// 	fmt.Println("Sent: <ACK>")
-		// } else if strings.HasPrefix(hexData, "02") && strings.Contains(hexData, "03") {
-		// 	fmt.Println("Data Frame Received:", asciiData)
-		// 	sendMessage(conn, "06")
-		// 	fmt.Println("Sent: <ACK>")
-		// } else if hexData == "04" {
-		// 	sendMessage(conn, "06")
-		// 	fmt.Println("Received: <EOT> - Sent <ACK> and closing connection")
-		// } else {
-		// 	fmt.Println("Unknown or unrecognized message format")
-		// }
+		if hexData == "05" {
+			sendMessage(conn, "06")
+			fmt.Println("Sent: <ACK>")
+		} else if strings.HasPrefix(hexData, "02") && strings.Contains(hexData, "03") {
+			fmt.Println("Data Frame Received:", asciiData)
+			sendMessage(conn, "06")
+			fmt.Println("Sent: <ACK>")
+		} else if hexData == "04" {
+			sendMessage(conn, "06")
+			fmt.Println("Received: <EOT> - Sent <ACK> and closing connection")
+		} else {
+			fmt.Println("Unknown or unrecognized message format")
+		}
 	}
 }
 

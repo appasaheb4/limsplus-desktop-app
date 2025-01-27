@@ -14,17 +14,12 @@ class InstrumentLogsStore {
       fs.mkdirSync(this.logDirectory);
     }
 
-    this.createLogFile();
-  }
+    this.logFilePath = path.join(this.logDirectory, 'instrument-logs.txt');
 
-  createLogFile() {
-    // Create a new log file with a timestamp in the name
-    const dateTime = new Date().toISOString().replace(/[:.]/g, '-');
-    this.logFilePath = path.join(
-      this.logDirectory,
-      `instrument-logs-${dateTime}.txt`,
-    );
-    fs.writeFileSync(this.logFilePath, '');
+    // Ensure the log file exists
+    if (!fs.existsSync(this.logFilePath)) {
+      fs.writeFileSync(this.logFilePath, '');
+    }
   }
 
   appendLog(lines) {

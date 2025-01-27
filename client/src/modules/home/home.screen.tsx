@@ -90,11 +90,16 @@ const Home = observer(() => {
                     filePath,
                   );
                 };
+
+                // Get the user data path and point to `instrument-logs.txt`
                 const filePath =
                   (await ipcRenderer.invoke('get-user-data-path')) +
-                  '/received-message.json';
+                  '/instrument-logs/instrument-logs.txt';
+
                 const fileExists = await checkFileExists(filePath);
+
                 if (fileExists) {
+                  // Open the text file if it exists
                   await ipcRenderer.invoke('open-file', filePath);
                 } else {
                   alert('Log file does not exist');
@@ -103,6 +108,7 @@ const Home = observer(() => {
             >
               Instrument Logs
             </button>
+
             <button className='item'>Image Files</button>
             <button className='item'>HL7 Files</button>
             <button className='item'>Backup/Restore</button>
