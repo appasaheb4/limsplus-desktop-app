@@ -6,13 +6,14 @@
   "main": "build/electron/main.js",
   "private": true,
   "scripts": {
+    "build:go": "node build-go-server.js",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "postinstall": "electron-builder install-app-deps",
-    "dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
+    "dev": "yarn build:go && concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
     "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
-    "electron:build": "rm -rf dist && yarn build && tsc -p electron && electron-builder",
+    "electron:build": "yarn build:go && rm -rf dist && yarn build && tsc -p electron && electron-builder",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "prettier:fix": "prettier --write ."
@@ -50,7 +51,8 @@
     "extends": null,
     "files": [
       "build/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "electron/server/**/*"
     ],
     "directories": {
       "buildResources": "assets"

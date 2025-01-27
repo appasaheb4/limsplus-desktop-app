@@ -6,6 +6,10 @@ import installExtension, {
 
 const Store = require('./store.js');
 const MessageStore = require('./messageStore.js');
+const InstrumentLogsStore = require('./instrumentLogsStore');
+const WebSocket = require('ws');
+const { spawn } = require('child_process');
+let goServerProcess: any = null;
 
 // for file upload
 const fs = require('fs');
@@ -15,6 +19,7 @@ const { default: axios } = require('axios');
 let mainWindow: any;
 // let childWindows = [];
 let childWindows: any;
+let ws: WebSocket | null = null; // Define ws in a global scope
 
 const isDev = !app.isPackaged;
 process.env.NODE_ENV = 'production';
@@ -33,6 +38,10 @@ const messageStore = new MessageStore({
   defaults: {
     receivedMessage: '',
   },
+});
+
+const instrumentLogStore = new InstrumentLogsStore({
+  configName: 'instrument-logs',
 });
 
 function createWindow() {
@@ -79,6 +88,10 @@ app.whenReady().then(() => {
   //   }
   // });
   app.on('window-all-closed', () => {
+    if (goServerProcess) {
+      goServerProcess.kill();
+      goServerProcess = null;
+    }
     if (process.platform !== 'darwin') {
       app.quit();
     }
@@ -106,6 +119,41 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
   childWindows.once('ready-to-show', () => {
     childWindows.maximize();
     childWindows.show();
+  });
+
+  // Start the Go server
+  const serverPath = isDev
+    ? path.join(
+        __dirname, // Development mode: relative to `electron/`
+        'server',
+        process.platform === 'win32' ? 'server.exe' : 'server',
+      )
+    : path.join(
+        process.resourcesPath, // Production mode: packaged app's resources folder
+        'server',
+        process.platform === 'win32' ? 'server.exe' : 'server',
+      );
+
+  goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
+
+  goServerProcess.on('error', (err: any) => {
+    console.error('Failed to start Go server:', err);
+  });
+
+  goServerProcess.on('exit', (code: any) => {
+    console.log(`Go server exited with code ${code}`);
+  });
+
+  // Stop the Go server when the window is closed
+  childWindows.on('closed', () => {
+    if (goServerProcess) {
+      goServerProcess.kill();
+      goServerProcess = null;
+      console.log(
+        'Go server stopped because the integration-gateway screen was closed.',
+      );
+    }
+    childWindows = null;
   });
 });
 
@@ -151,11 +199,15 @@ ipcMain.handle('read-companyList', (event) => {
 });
 
 ipcMain.handle('receivedMessage', async (event, payload) => {
-  await messageStore.set('receivedMessage', payload);
-  event.sender.send('stored-received-message');
-  // .then(() => {
-  //   event.sender.send('stored-received-message');
-  // });
+  if (payload && Array.isArray(payload)) {
+    await messageStore.set('receivedMessage', payload);
+    event.sender.send('stored-received-message');
+    await instrumentLogStore.appendLog(payload);
+  } else {
+    console.error(
+      'Invalid payload: `receivedMessage` must be an array of strings.',
+    );
+  }
 });
 
 ipcMain.on('file:upload', async (event, opt: any) => {
@@ -197,4 +249,88 @@ ipcMain.on('set-title', (event, title) => {
 
 ipcMain.handle('get-user-data-path', () => {
   return app.getPath('userData');
+});
+
+ipcMain.handle('start-server', async (event, ip, tcpPort) => {
+  try {
+    const response = await axios.get(
+      `http://localhost:9000/start-tcp?ip=${ip}&tcpPort=${tcpPort}`,
+    );
+
+    // Ensure the sender is still valid before sending a response
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('server-message', response.data);
+    }
+  } catch (error: any) {
+    // Ensure the sender is still valid before sending an error response
+    if (!event.sender.isDestroyed()) {
+      event.sender.send(
+        'server-message',
+        `Error starting server: ${error.message}`,
+      );
+    }
+    console.error('Error occurred while starting server:', error.message);
+  }
+});
+
+ipcMain.handle('connect-ws', (event) => {
+  const wsUrl = `ws://localhost:6000/ws`;
+  const ws = new WebSocket(wsUrl);
+
+  ws.on('open', () => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-connected', 'WebSocket connection established');
+    }
+  });
+
+  ws.on('message', (data: any) => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-data', data.toString());
+    }
+  });
+
+  ws.on('close', () => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-disconnected', 'WebSocket connection closed');
+    }
+  });
+
+  ws.on('error', (error: any) => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ws-error', error.message);
+    }
+  });
+});
+
+ipcMain.handle('disconnect-ws', async (event, ip, tcpPort) => {
+  if (ws) {
+    ws.close();
+    ws = null;
+  } else {
+    event.sender.send(
+      'ws-error',
+      'No active WebSocket connection to disconnect',
+    );
+  }
+
+  try {
+    const response = await axios.get(
+      `http://localhost:9000/stop?ip=${ip}&tcpPort=${tcpPort}`,
+    );
+    event.sender.send('server-message', response.data);
+  } catch (error: any) {
+    console.error('Error stopping server:', error.message);
+    event.sender.send(
+      'server-message',
+      `Error stopping server: ${error.message}`,
+    );
+  }
+});
+
+ipcMain.handle('send-ws', (event, message) => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(message);
+  } else {
+    event.sender.send('ws-error', 'WebSocket is not connected');
+  }
 });

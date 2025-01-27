@@ -21,6 +21,7 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+var tcpServers = make(map[string]net.Listener)
 
 var (
 	wsConnections = struct {
@@ -46,6 +47,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	wsConnections.Unlock()
 
 	fmt.Printf("WebSocket connected: %s\n", conn.RemoteAddr().String())
+	defer func() {
+		wsConnections.Lock()
+		for i, c := range wsConnections.connections {
+			if c == conn {
+				wsConnections.connections = append(wsConnections.connections[:i], wsConnections.connections[i+1:]...)
+				break
+			}
+		}
+		wsConnections.Unlock()
+		fmt.Printf("WebSocket disconnected: %s\n", conn.RemoteAddr().String())
+	}()
 
 	for {
 		_, message, err := conn.ReadMessage()
@@ -119,6 +131,7 @@ func handleTCPConnection(conn net.Conn, messages chan<- string) {
 		// Convert the incoming data to hex string
 		hexData := hex.EncodeToString(buffer[:n])
 		fmt.Printf("Received (hex): %s\n", hexData)
+		broadcastToWebSocketClients(hexData)
 
 		// Parse hex data to ASCII
 		asciiData, parseErr := hexToASCII(hexData)
@@ -128,7 +141,7 @@ func handleTCPConnection(conn net.Conn, messages chan<- string) {
 		}
 		message := asciiData
 		fmt.Printf("Parsed Data (ASCII): %s\n", asciiData)
-		broadcastToWebSocketClients(message)
+		// broadcastToWebSocketClients(message)
 		messages <- fmt.Sprintf("TCP Received: %s\n", message)
 
 		if hexData == "05" {
@@ -216,16 +229,25 @@ func main() {
 	http.HandleFunc("/start-tcp", func(w http.ResponseWriter, r *http.Request) {
 		ip := r.URL.Query().Get("ip")
 		tcpPort := r.URL.Query().Get("tcpPort")
+
 		if ip == "" || tcpPort == "" {
 			http.Error(w, "IP and TCP port are required", http.StatusBadRequest)
 			return
 		}
 
+		addr := fmt.Sprintf("%s:%s", ip, tcpPort)
+		mu.Lock()
+		if _, exists := tcpServers[addr]; exists {
+			mu.Unlock()
+			http.Error(w, "TCP server already running on this address", http.StatusBadRequest)
+			return
+		}
+		mu.Unlock()
+
 		messages := make(chan string)
 		var wg sync.WaitGroup
 		wg.Add(1)
 
-		// Start the TCP server
 		go startTCPServer(ip, tcpPort, &wg, messages)
 
 		go func() {
@@ -257,31 +279,35 @@ func main() {
 	})
 	// Endpoint to stop either TCP or Serial connection
 	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
-		// Logic to stop either TCP/IP or Serial connection
 		ip := r.URL.Query().Get("ip")
 		tcpPort := r.URL.Query().Get("tcpPort")
-		addr := fmt.Sprintf("%s:%s", ip, tcpPort)
 
-		mu.Lock()
-		if !tcpRunning {
-			mu.Unlock()
-			w.Write([]byte("TCP server not running"))
+		if ip == "" || tcpPort == "" {
+			http.Error(w, "IP and TCP port are required", http.StatusBadRequest)
 			return
 		}
-		tcpRunning = false
-		close(done)
-		mu.Unlock()
-		if listener != nil {
-			listener.Close()
-			fmt.Printf("TCP server stopped on %s\n", addr)
-			broadcastToWebSocketClients(fmt.Sprintf("TCP server stopped on %s\n", addr))
-		}
-		w.Write([]byte(fmt.Sprintf("TCP server stopped on %s", addr)))
+
+		stopTCPServer(ip, tcpPort)
+		w.Write([]byte(fmt.Sprintf("TCP server stop request processed for %s:%s", ip, tcpPort)))
 	})
 
-	fmt.Println("Control server started at :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	fmt.Println("Control server started at :9000")
+	if err := http.ListenAndServe(":9000", nil); err != nil {
 		fmt.Printf("Error starting control server: %s\n", err)
+	}
+}
+
+func stopTCPServer(ip, port string) {
+	addr := fmt.Sprintf("%s:%s", ip, port)
+	mu.Lock()
+	defer mu.Unlock()
+	if listener, exists := tcpServers[addr]; exists {
+		listener.Close()
+		delete(tcpServers, addr)
+		fmt.Printf("TCP server stopped on %s\n", addr)
+		broadcastToWebSocketClients(fmt.Sprintf("TCP server stopped on %s\n", addr))
+	} else {
+		fmt.Printf("TCP server not running on %s\n", addr)
 	}
 }
 
