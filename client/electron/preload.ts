@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   sendWS: (message: any) => ipcRenderer.invoke('send-ws', message),
   disconnectWS: () => ipcRenderer.invoke('disconnect-ws'),
   onWSData: (callback: any) =>
-    ipcRenderer.on('ws-data', (event, data) => callback(data)),
+    ipcRenderer.on('ws-data', (event: any, data: any) => callback(data)),
   onWSConnected: (callback: any) =>
     ipcRenderer.on('ws-connected', (event, data) => callback(data)),
   onWSDisconnected: (callback: any) =>
