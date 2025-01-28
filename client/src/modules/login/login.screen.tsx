@@ -5,13 +5,19 @@ import Background from '../../assets/images/bg-login.png';
 import { useStores } from '../../stores';
 import { toJS } from 'mobx';
 const { ipcRenderer } = window.require('electron');
+import type { IpcRendererEvent } from 'electron';
+
+type User = {
+  userId: string;
+  companyCode: string;
+};
 
 const Login = observer(() => {
   const { loginStore } = useStores();
   const navigate = useNavigate();
 
   useEffect(() => {
-    ipcRenderer.on('user', (event, user) => {
+    ipcRenderer.on('user', (_event: IpcRendererEvent, user: User) => {
       if (user.userId) navigate('/dashboard');
     });
     loginStore.loginService.getCompanyList();

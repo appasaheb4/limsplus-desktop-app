@@ -1,33 +1,35 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Import Electron types
+import { IpcRendererEvent } from 'electron';
+
+// Define types
+type Callback<T = any> = (data: T, event?: IpcRendererEvent) => void;
+
 contextBridge.exposeInMainWorld('api', {
-  connectWS: (ip: string, port: any) =>
+  connectWS: (ip: string, port: string): Promise<void> =>
     ipcRenderer.invoke('connect-ws', ip, port),
-  sendWS: (message: any) => ipcRenderer.invoke('send-ws', message),
-  disconnectWS: () => ipcRenderer.invoke('disconnect-ws'),
-  onWSData: (callback: any) =>
-    ipcRenderer.on('ws-data', (event: any, data: any) => callback(data)),
-  onWSConnected: (callback: any) =>
-    ipcRenderer.on('ws-connected', (event: any, data: any) => callback(data)),
-  onWSDisconnected: (callback: any) =>
-    ipcRenderer.on(
-      'ws-disconnected',
-      (_event: Electron.IpcRendererEvent, data: any) => callback(data),
+  sendWS: (message: string): Promise<void> =>
+    ipcRenderer.invoke('send-ws', message),
+  disconnectWS: (): Promise<void> => ipcRenderer.invoke('disconnect-ws'),
+  onWSData: (callback: Callback<string>): void =>
+    ipcRenderer.on('ws-data', (event: IpcRendererEvent, data: string) =>
+      callback(data, event),
     ),
-  onWSError: (callback: any) =>
-    ipcRenderer.on('ws-error', (event: any, data: any) => callback(data)),
-  saveData: (username: any) => {
+  onWSConnected: (callback: Callback<string>): void =>
+    ipcRenderer.on('ws-connected', (event: IpcRendererEvent, data: string) =>
+      callback(data, event),
+    ),
+  onWSDisconnected: (callback: Callback<string>): void =>
+    ipcRenderer.on('ws-disconnected', (event: IpcRendererEvent, data: string) =>
+      callback(data, event),
+    ),
+  onWSError: (callback: Callback<string>): void =>
+    ipcRenderer.on('ws-error', (event: IpcRendererEvent, data: string) =>
+      callback(data, event),
+    ),
+  saveData: (username: string): void => {
     let data = { username };
     console.log(data);
   },
 });
-
-// window.addEventListener('DOMContentLoaded', () => {
-//   ipcRenderer.on('set-title', (event, title) => {
-//     document.title = title; // Set the document title
-//     const titleElement = document.getElementById('title');
-//     if (titleElement) {
-//       titleElement.innerText = title; // Update the title element in the HTML
-//     }
-//   });
-// });

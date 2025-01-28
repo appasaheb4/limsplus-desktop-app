@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 const { ipcRenderer } = window.require('electron');
+import { IpcRendererEvent } from 'electron';
+
+type User = {
+  userId: string;
+  companyCode: string;
+  environment: string;
+};
 
 const IntegrationGateway = observer(() => {
   const { integrationGatewayStore } = useStores();
@@ -26,7 +33,7 @@ const IntegrationGateway = observer(() => {
 
   useEffect(() => {
     ipcRenderer.invoke('read-user');
-    ipcRenderer.on('send-user', (event, user) => {
+    ipcRenderer.on('send-user', (_event: IpcRendererEvent, user: User) => {
       setInputs({
         ...inputs,
         companyCode: user.companyCode,
@@ -84,8 +91,8 @@ const IntegrationGateway = observer(() => {
     ) as HTMLTextAreaElement | null;
 
     if (logTextarea) {
-      logTextarea.value += `${message}\n`; // Append new message
-      logTextarea.scrollTop = logTextarea.scrollHeight; // Auto-scroll to bottom
+      logTextarea.value += `${message}\n`;
+      logTextarea.scrollTop = logTextarea.scrollHeight;
     } else {
       console.error('Log text area with ID "secondSpaceContent" not found');
     }
@@ -99,61 +106,80 @@ const IntegrationGateway = observer(() => {
     } else {
       try {
         // Add event listeners
-        ipcRenderer.once('ws-connected', (event, message) => {
-          appendLog(`WebSocket Connected: ${message}`);
-          updateRowStatus('Connected');
-          ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
-        });
-        ipcRenderer.on('server-message', (event, message) => {
-          appendLog(`Server Message: ${message}`);
-        });
-        ipcRenderer.on('ws-data', (event, hexData) => {
-          if (typeof hexData !== 'string') {
-            console.error('Invalid data format received:', hexData);
-            return;
-          }
-          // Normalize data by trimming and converting to lowercase
-          const normalizedData = hexData.trim().toLowerCase();
-          // Convert hex to ASCII
-          const asciiData = hexToASCII(normalizedData);
-          // Server  Send ENQ Store In Array(Hex value) 05
-          if (normalizedData === '05') {
-            if (!messageArray.includes(asciiData)) {
-              appendLog(`Server Message: 05`);
-              messageArray.push('05');
+        ipcRenderer.once(
+          'ws-connected',
+          (_event: IpcRendererEvent, message: string) => {
+            appendLog(`WebSocket Connected: ${message}`);
+            updateRowStatus('Connected');
+            ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
+          },
+        );
+
+        ipcRenderer.on(
+          'server-message',
+          (_event: IpcRendererEvent, message: string) => {
+            appendLog(`Server Message: ${message}`);
+          },
+        );
+
+        ipcRenderer.on(
+          'ws-data',
+          (_event: IpcRendererEvent, hexData: string) => {
+            if (typeof hexData !== 'string') {
+              console.error('Invalid data format received:', hexData);
+              return;
             }
-          }
-          // Prevent blank or invalid strings from being pushed
-          if (asciiData && asciiData.trim() !== '') {
-            messageArray.push(asciiData);
-            appendLog(`Server Message: ${asciiData}`);
-          } else {
-            console.warn(
-              'Empty or invalid ASCII data, not pushing to array:',
-              asciiData,
-            );
-          }
 
-          // Handle specific "04" case EOT
-          if (normalizedData === '04') {
-            if (!messageArray.includes(asciiData)) {
-              appendLog(`Server Message: 04`);
-              messageArray.push('04');
+            // Normalize data by trimming and converting to lowercase
+            const normalizedData = hexData.trim().toLowerCase();
+            // Convert hex to ASCII
+            const asciiData = hexToASCII(normalizedData);
+
+            // Server  Send ENQ Store In Array(Hex value) 05
+            if (normalizedData === '05') {
+              if (!messageArray.includes(asciiData)) {
+                appendLog(`Server Message: 05`);
+                messageArray.push('05');
+              }
             }
-            ipcRenderer.invoke('receivedMessage', messageArray);
-          }
-        });
+            // Prevent blank or invalid strings from being pushed
+            if (asciiData && asciiData.trim() !== '') {
+              messageArray.push(asciiData);
+              appendLog(`Server Message: ${asciiData}`);
+            } else {
+              console.warn(
+                'Empty or invalid ASCII data, not pushing to array:',
+                asciiData,
+              );
+            }
 
-        ipcRenderer.once('ws-disconnected', (event, message) => {
-          appendLog(`WebSocket Disconnected: ${message}`);
-          updateRowStatus('Disconnected');
-          setIsConnected(false);
-        });
+            // Handle specific "04" case EOT
+            if (normalizedData === '04') {
+              if (!messageArray.includes(asciiData)) {
+                appendLog(`Server Message: 04`);
+                messageArray.push('04');
+              }
+              ipcRenderer.invoke('receivedMessage', messageArray);
+            }
+          },
+        );
 
-        ipcRenderer.once('ws-error', (event, error) => {
-          appendLog(`WebSocket Error: ${error}`);
-          updateRowStatus('Error');
-        });
+        ipcRenderer.once(
+          'ws-disconnected',
+          (_event: IpcRendererEvent, message: string) => {
+            appendLog(`WebSocket Disconnected: ${message}`);
+            updateRowStatus('Disconnected');
+            setIsConnected(false);
+          },
+        );
+
+        ipcRenderer.once(
+          'ws-error',
+          (_event: IpcRendererEvent, error: string) => {
+            appendLog(`WebSocket Error: ${error}`);
+            updateRowStatus('Error');
+          },
+        );
 
         await ipcRenderer.invoke('connect-ws');
         setIsConnected(true);
