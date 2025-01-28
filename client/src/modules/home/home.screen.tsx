@@ -5,11 +5,18 @@ import './style.css';
 
 const { ipcRenderer, app } = window.require('electron');
 
+import { IpcRendererEvent } from 'electron';
+
+type User = {
+  userId: string;
+  companyCode: string;
+};
+
 const Home = observer(() => {
   const { integrationGatewayStore, localStoragePath } = useStores();
   useEffect(() => {
     ipcRenderer.invoke('read-user');
-    ipcRenderer.on('send-user', (event, user) => {
+    ipcRenderer.on('send-user', (_event: IpcRendererEvent, user: User) => {
       const userIdElement = document.getElementById('userId');
       if (userIdElement) {
         userIdElement.innerText = `Welcome ${user.userId}`;

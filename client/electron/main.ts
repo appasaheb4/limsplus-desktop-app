@@ -136,11 +136,11 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
 
   goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
 
-  goServerProcess.on('error', (err: any) => {
+  goServerProcess.on('error', (err: string) => {
     console.error('Failed to start Go server:', err);
   });
 
-  goServerProcess.on('exit', (code: any) => {
+  goServerProcess.on('exit', (code: string) => {
     console.log(`Go server exited with code ${code}`);
   });
 
@@ -283,7 +283,7 @@ ipcMain.handle('connect-ws', (event) => {
     }
   });
 
-  ws.on('message', (data: any) => {
+  ws.on('message', (data: string) => {
     if (!event.sender.isDestroyed()) {
       event.sender.send('ws-data', data.toString());
     }
