@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
-const { ipcRenderer } = window.require('electron');
 import { IpcRendererEvent } from 'electron';
+
+const { ipcRenderer } = window.require('electron');
 
 type User = {
   userId: string;

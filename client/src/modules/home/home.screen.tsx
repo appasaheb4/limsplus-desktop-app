@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
+import { IpcRendererEvent } from 'electron';
 import './style.css';
 
 const { ipcRenderer, app } = window.require('electron');
-
-import { IpcRendererEvent } from 'electron';
 
 type User = {
   userId: string;

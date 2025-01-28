@@ -4,8 +4,9 @@ import { useEffect } from 'react';
 import Background from '../../assets/images/bg-login.png';
 import { useStores } from '../../stores';
 import { toJS } from 'mobx';
-const { ipcRenderer } = window.require('electron');
 import type { IpcRendererEvent } from 'electron';
+
+const { ipcRenderer } = window.require('electron');
 
 type User = {
   userId: string;
