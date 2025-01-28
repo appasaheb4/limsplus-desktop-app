@@ -35,9 +35,9 @@
     leven "^3.1.0"
 
 "@apollo/client@^3.12.6", "@apollo/client@^3.7.0":
-  version "3.12.7"
-  resolved "https://registry.yarnpkg.com/@apollo/client/-/client-3.12.7.tgz#d7f491a9213fa36df3187075007794dbfd80ad94"
-  integrity sha512-c0LSzS3tmJ06WSyNxsTHlfc4OLLYDnWtN+zkRjMQ80KCcp89sEpNgZP5ZCXdt2pUwUqOAvZFKJW7L8tolDzkrw==
+  version "3.12.8"
+  resolved "https://registry.yarnpkg.com/@apollo/client/-/client-3.12.8.tgz#99670386104f77ceba03f7e3dc0d91813f03cd3c"
+  integrity sha512-053z5eCM7zNl81Lxs/SqHv8e+x3sszrtmGS2TNuPW0ZTZzmKATMsIsoblx1Kt0E67Ze3jb99JSPiQHG9ozGc3g==
   dependencies:
     "@graphql-typed-document-node/core" "^3.1.1"
     "@wry/caches" "^1.0.0"
@@ -48,7 +48,6 @@
     optimism "^0.18.0"
     prop-types "^15.7.2"
     rehackt "^0.1.0"
-    response-iterator "^0.2.6"
     symbol-observable "^4.0.0"
     ts-invariant "^0.10.3"
     tslib "^2.3.0"
@@ -2345,9 +2344,9 @@
     "@types/node" "*"
 
 "@types/node@*":
-  version "22.10.10"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.10.10.tgz#85fe89f8bf459dc57dfef1689bd5b52ad1af07e6"
-  integrity sha512-X47y/mPNzxviAGY5TcYPtYL8JsY3kAq2n8fMmKoRCxq/c4v4pyGNCzM2R6+M5/umG4ZfHuT+sgqDYqWc9rJ6ww==
+  version "22.12.0"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.12.0.tgz#bf8af3b2af0837b5a62a368756ff2b705ae0048c"
+  integrity sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==
   dependencies:
     undici-types "~6.20.0"
 
@@ -9566,11 +9565,6 @@ resolve@^2.0.0-next.5:
     is-core-module "^2.13.0"
     path-parse "^1.0.7"
     supports-preserve-symlinks-flag "^1.0.0"
-
-response-iterator@^0.2.6:
-  version "0.2.20"
-  resolved "https://registry.yarnpkg.com/response-iterator/-/response-iterator-0.2.20.tgz#9a8259d7f6fe35fb81ab2d8f2b938e5e6c892821"
-  integrity sha512-RfNi9saiJ9VKznrRZEGZtlfeiQI7NWMUlXvmkvO60xaHfW1y+36EOibZkV59LuKNak8VIqL6IyxYxhMOGTurIQ==
 
 responselike@^2.0.0:
   version "2.0.1"

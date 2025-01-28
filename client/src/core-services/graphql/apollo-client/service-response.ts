@@ -8,11 +8,6 @@ import _ from 'lodash';
 export class ServiceResponse<T> {
   data?: T;
   success?: number;
-  /**
-   * @deprecated Use getErrorMessage() instead.
-   * Message property can be undefined at times if
-   * server fails to return it in some scenarios.
-   */
   message?: string;
 
   constructor(success: number, message: string, data?: T) {

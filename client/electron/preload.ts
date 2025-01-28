@@ -8,11 +8,14 @@ contextBridge.exposeInMainWorld('api', {
   onWSData: (callback: any) =>
     ipcRenderer.on('ws-data', (event: any, data: any) => callback(data)),
   onWSConnected: (callback: any) =>
-    ipcRenderer.on('ws-connected', (event, data) => callback(data)),
+    ipcRenderer.on('ws-connected', (event: any, data: any) => callback(data)),
   onWSDisconnected: (callback: any) =>
-    ipcRenderer.on('ws-disconnected', (event, data) => callback(data)),
+    ipcRenderer.on(
+      'ws-disconnected',
+      (_event: Electron.IpcRendererEvent, data: any) => callback(data),
+    ),
   onWSError: (callback: any) =>
-    ipcRenderer.on('ws-error', (event, data) => callback(data)),
+    ipcRenderer.on('ws-error', (event: any, data: any) => callback(data)),
   saveData: (username: any) => {
     let data = { username };
     console.log(data);

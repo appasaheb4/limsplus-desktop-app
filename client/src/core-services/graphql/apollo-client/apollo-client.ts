@@ -6,7 +6,7 @@ import {
   ApolloLink,
 } from '@apollo/client';
 import { onError } from '@apollo/client/link/error';
-import { stores } from '@/stores';
+import { stores } from '../../../stores';
 import { setContext } from '@apollo/client/link/context';
 import { createUploadLink } from 'apollo-upload-client';
 
@@ -40,13 +40,9 @@ const customFetch = async (
 const getBaseUrl = (env: string) => {
   switch (env) {
     case 'Production':
-      return process.env.REACT_APP_API_HOST_PORD;
-    case 'Development':
-      return process.env.REACT_APP_API_HOST_DEV;
-    case 'Docker':
-      return process.env.REACT_APP_API_HOST_DOCKER;
+      return process.env.REACT_APP_GRAPHQL_HOST_PORD;
     default:
-      return process.env.REACT_APP_API_HOST_LOCAL;
+      return process.env.REACT_APP_GRAPHQL_HOST_LOCAL;
   }
 };
 

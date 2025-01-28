@@ -10,6 +10,7 @@ const IntegrationGateway = observer(() => {
     port: '8080',
     companyCode: '',
     environment: '',
+    department: '',
     instrumentType: '',
     instrumentId: '',
   });
@@ -29,10 +30,21 @@ const IntegrationGateway = observer(() => {
       setInputs({
         ...inputs,
         companyCode: user.companyCode,
+        environment: user.environment,
       });
-      integrationGatewayStore.integrationGatewayService.fetchEnvironment({
-        code: user.companyCode,
-      });
+      // integrationGatewayStore.integrationGatewayService.fetchEnvironment({
+      //   code: user.companyCode,
+      // });
+      integrationGatewayStore.integrationGatewayService
+        .findByFieldsInstrumentMaster({
+          input: { filter: { companyCode: user.companyCode } },
+        })
+        .then((res) => {
+          console.log({ res });
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+        });
     });
     ipcRenderer.send('set-title', 'Integration Gateway');
   }, []);
@@ -81,9 +93,7 @@ const IntegrationGateway = observer(() => {
 
   const handleConnection = async () => {
     let messageArray: string[] = [];
-
     if (!validateInputs()) return;
-
     if (isConnected) {
       disconnect();
     } else {
@@ -94,22 +104,18 @@ const IntegrationGateway = observer(() => {
           updateRowStatus('Connected');
           ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
         });
-
         ipcRenderer.on('server-message', (event, message) => {
           appendLog(`Server Message: ${message}`);
         });
-
         ipcRenderer.on('ws-data', (event, hexData) => {
           if (typeof hexData !== 'string') {
             console.error('Invalid data format received:', hexData);
             return;
           }
-
           // Normalize data by trimming and converting to lowercase
           const normalizedData = hexData.trim().toLowerCase();
           // Convert hex to ASCII
           const asciiData = hexToASCII(normalizedData);
-
           // Server  Send ENQ Store In Array(Hex value) 05
           if (normalizedData === '05') {
             if (!messageArray.includes(asciiData)) {
@@ -185,6 +191,7 @@ const IntegrationGateway = observer(() => {
     if (!inputs.port) missingFields.push('Port');
     if (!inputs.companyCode) missingFields.push('Company Code');
     if (!inputs.environment) missingFields.push('Environment');
+    if (!inputs.department) missingFields.push('Department');
     if (!inputs.instrumentType) missingFields.push('Instrument Type');
     if (!inputs.instrumentId) missingFields.push('Instrument ID');
 
@@ -377,27 +384,32 @@ const IntegrationGateway = observer(() => {
                 <label className='block text-sm font-medium mb-1'>
                   Environment:
                 </label>
-                <select
-                  id='env'
+                <input
+                  type='text'
+                  id='environment'
+                  disabled
                   value={inputs.environment}
                   className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium mb-1'>
+                  Department
+                </label>
+                <select
+                  id='department'
+                  value={inputs.department}
+                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
                   onChange={(e) => {
-                    const environment = e.target.value;
+                    const department = e.target.value;
                     setInputs({
                       ...inputs,
-                      environment,
+                      department,
                     });
-                    removeOptions(document.getElementById('intrumentType'));
-                    integrationGatewayStore.integrationGatewayService.fetchInstrumentDetails(
-                      {
-                        companyCode: inputs?.companyCode,
-                        environment,
-                      },
-                    );
                   }}
                 >
                   <option>Select</option>
-                  {integrationGatewayStore.integrationGateway.environment?.map(
+                  {integrationGatewayStore.integrationGateway.instrumentTypeList?.map(
                     (item, index) => (
                       <option key={index} value={item}>
                         {item}

@@ -159,12 +159,11 @@ export class Service {
 const getBaseUrl = (env: string): string => {
   switch (env) {
     case 'Production':
-      return process.env.REACT_APP_API_HOST_PORD!;
+      return process.env.REACT_APP_REST_API_HOST_PORD!;
     default:
-      return process.env.REACT_APP_API_HOST_LOCAL!;
+      return process.env.REACT_APP_REST_API_HOST_LOCAL!;
   }
 };
 export const service = new Service(
   getBaseUrl(process.env.REACT_APP_ENV || 'Local'),
 );
-export const serviceLocal = new Service('http://localhost:8080/api/');

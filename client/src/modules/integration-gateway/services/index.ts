@@ -1,5 +1,11 @@
 import { service } from '../../../core-services/rest-api';
+import {
+  client,
+  ServiceResponse,
+} from '../../../core-services/graphql/apollo-client';
 import { stores } from '../../../stores';
+import { FIND_BY_FIELDS } from './mutation';
+
 export class IntegrationGatewayService {
   async fetchEnvironment(payload: any) {
     try {
@@ -35,4 +41,19 @@ export class IntegrationGatewayService {
       throw error;
     }
   }
+
+  findByFieldsInstrumentMaster = (variables: any) =>
+    new Promise<any>((resolve, reject) => {
+      client
+        .mutate({
+          mutation: FIND_BY_FIELDS,
+          variables,
+        })
+        .then((response: any) => {
+          resolve(response.data);
+        })
+        .catch((error) =>
+          reject(new ServiceResponse<any>(0, error.message, undefined)),
+        );
+    });
 }
