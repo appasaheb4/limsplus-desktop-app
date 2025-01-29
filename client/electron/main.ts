@@ -176,6 +176,13 @@ ipcMain.handle('accessToken', async (sender, payload) => {
   store.set('accessToken', payload);
 });
 
+ipcMain.handle('read-access-token', (event) => {
+  let token = store.get('accessToken');
+  if (token) {
+    event.sender.send('send-access-token', token);
+  }
+});
+
 ipcMain.handle('user', async (sender, payload) => {
   store.set('user', payload);
 });

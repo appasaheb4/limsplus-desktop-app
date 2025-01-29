@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import _ from 'lodash';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
@@ -19,10 +20,11 @@ const IntegrationGateway = observer(() => {
     companyCode: '',
     environment: '',
     department: '',
-    instrumentType: '',
-    instrumentId: '',
+    instType: '',
+    instId: '',
   });
   const [isConnected, setIsConnected] = useState(false);
+  const [instrumentDetails, setInstrumentDetails] = useState<Array<any>>([]);
 
   function removeOptions(selectElement: any) {
     var i,
@@ -40,15 +42,16 @@ const IntegrationGateway = observer(() => {
         companyCode: user.companyCode,
         environment: user.environment,
       });
-      // integrationGatewayStore.integrationGatewayService.fetchEnvironment({
-      //   code: user.companyCode,
-      // });
       integrationGatewayStore.integrationGatewayService
         .findByFieldsInstrumentMaster({
           input: { filter: { companyCode: user.companyCode } },
         })
         .then((res) => {
-          console.log({ res });
+          if (res.findByFieldsInstrumentMaster.success) {
+            setInstrumentDetails(res?.findByFieldsInstrumentMaster.data);
+          } else {
+            alert(res.findByFieldsInstrumentMaster.message);
+          }
         })
         .catch((error) => {
           console.error('Error:', error);
@@ -219,8 +222,8 @@ const IntegrationGateway = observer(() => {
     if (!inputs.companyCode) missingFields.push('Company Code');
     if (!inputs.environment) missingFields.push('Environment');
     if (!inputs.department) missingFields.push('Department');
-    if (!inputs.instrumentType) missingFields.push('Instrument Type');
-    if (!inputs.instrumentId) missingFields.push('Instrument ID');
+    if (!inputs.instType) missingFields.push('Instrument Type');
+    if (!inputs.instId) missingFields.push('Instrument ID');
 
     if (missingFields.length > 0) {
       alert(
@@ -251,8 +254,8 @@ const IntegrationGateway = observer(() => {
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.port}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.companyCode}</td>
         <td class="px-4 py-2 border border-gray-300 text-white">${inputs.environment}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentType}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instrumentId}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instType}</td>
+        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instId}</td>
         <td class="px-4 py-2 border border-gray-300 text-white" id="status-${inputs.ip}-${inputs.port}">Connecting...</td>
         <td class="px-4 py-2 border border-gray-300 text-white text-center">
           <i
@@ -432,17 +435,19 @@ const IntegrationGateway = observer(() => {
                     setInputs({
                       ...inputs,
                       department,
+                      instType: '',
+                      instId: '',
                     });
                   }}
                 >
                   <option>Select</option>
-                  {integrationGatewayStore.integrationGateway.instrumentTypeList?.map(
-                    (item, index) => (
-                      <option key={index} value={item}>
-                        {item}
-                      </option>
-                    ),
-                  )}
+                  {_.uniq(
+                    instrumentDetails?.map((item) => item.department),
+                  )?.map((item, index) => (
+                    <option key={index} value={item}>
+                      {item}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -450,25 +455,41 @@ const IntegrationGateway = observer(() => {
                   Instrument Type:
                 </label>
                 <select
-                  id='intrumentType'
-                  value={inputs.instrumentType}
+                  id='instrumentType'
+                  value={inputs.instType || 'Select'}
                   className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
                   onChange={(e) => {
-                    const instrumentType = e.target.value;
+                    const instType = e.target.value;
+                    const items = instrumentDetails.find(
+                      (item) => item.instType == instType,
+                    );
                     setInputs({
                       ...inputs,
-                      instrumentType,
+                      instType,
+                      instId: items?.instId,
+                      ip: items?.ipAddress,
+                      port: items?.portNo?.toString(),
                     });
                   }}
                 >
                   <option>Select</option>
-                  {integrationGatewayStore.integrationGateway.instrumentTypeList?.map(
-                    (item, index) => (
-                      <option key={index} value={item}>
-                        {item}
-                      </option>
-                    ),
-                  )}
+                  {_.uniqBy(
+                    instrumentDetails
+                      ?.map((item) => {
+                        if (item.department == inputs.department) {
+                          return {
+                            instId: item.instId,
+                            instType: item.instType,
+                          };
+                        }
+                      })
+                      ?.filter((item) => item),
+                    'instType',
+                  )?.map((item, index) => (
+                    <option key={index} value={item?.instType}>
+                      {item?.instType}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -476,20 +497,43 @@ const IntegrationGateway = observer(() => {
                 <label className='block text-sm font-medium mb-1'>
                   Instrument ID:
                 </label>
-                <input
-                  type='text'
-                  id='instId'
-                  value={inputs.instrumentId}
-                  placeholder='Instrument ID'
+                <select
+                  id='instrumentId'
+                  value={inputs.instId || 'Select'}
                   className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
                   onChange={(e) => {
-                    const instrumentId = e.target.value;
+                    const instId = e.target.value;
+                    const items = instrumentDetails.find(
+                      (item) => item.instId == instId,
+                    );
                     setInputs({
                       ...inputs,
-                      instrumentId,
+                      instType: items?.instType,
+                      instId,
+                      ip: items?.ipAddress,
+                      port: items?.portNo?.toString(),
                     });
                   }}
-                />
+                >
+                  <option>Select</option>
+                  {_.uniqBy(
+                    instrumentDetails
+                      ?.map((item) => {
+                        if (item.department == inputs.department) {
+                          return {
+                            instId: item.instId,
+                            instType: item.instType,
+                          };
+                        }
+                      })
+                      .filter((item) => item),
+                    'instId',
+                  )?.map((item, index) => (
+                    <option key={index} value={item?.instId}>
+                      {item?.instId}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -508,7 +552,6 @@ const IntegrationGateway = observer(() => {
             </div>
           </div>
         </div>
-
         <div
           id='logs-container'
           className='flex w-full items-center justify-center mt-10 p-4 bg-[#2a2a2a]'

@@ -9,6 +9,8 @@ import { onError } from '@apollo/client/link/error';
 import { stores } from '../../../stores';
 import { setContext } from '@apollo/client/link/context';
 import { createUploadLink } from 'apollo-upload-client';
+import { IpcRendererEvent } from 'electron';
+const { ipcRenderer } = window.require('electron');
 
 let apiCount = 0;
 const customFetch = async (
@@ -47,10 +49,23 @@ const getBaseUrl = (env: string) => {
 };
 
 const authLink = setContext(async (_, { headers }) => {
+  const accessToken = await new Promise<string>((resolve, reject) => {
+    ipcRenderer.invoke('read-access-token');
+    ipcRenderer.once(
+      'send-access-token',
+      (_event: IpcRendererEvent, token: string) => {
+        if (token) {
+          resolve(token);
+        } else {
+          reject('No token received');
+        }
+      },
+    );
+  });
   return {
     headers: {
       ...headers,
-      Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   };
 });

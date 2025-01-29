@@ -4,7 +4,7 @@ import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import './style.css';
 
-const { ipcRenderer, app } = window.require('electron');
+const { ipcRenderer } = window.require('electron');
 
 type User = {
   userId: string;
