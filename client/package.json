@@ -13,7 +13,7 @@
     "postinstall": "electron-builder install-app-deps",
     "dev": "yarn build:go && concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
     "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
-    "electron:build": "yarn build:go && rm -rf dist && yarn build && tsc -p electron && electron-builder",
+    "electron:build": "rm -rf dist && yarn build && tsc -p electron && yarn build:go && mkdir -p electron/server && [ -f electron/server/server ] || cp electron/server/server electron/server/ && electron-builder",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "prettier:fix": "prettier --write ."
@@ -51,7 +51,22 @@
     "files": [
       "build/**/*",
       "electron/**/*",
-      "electron/server/**/*"
+      {
+        "from": "electron/server/",
+        "to": "Resources/server/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "electron/server/",
+        "to": "server/",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "directories": {
       "buildResources": "assets"
