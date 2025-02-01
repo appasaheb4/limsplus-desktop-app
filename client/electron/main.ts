@@ -124,12 +124,12 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
   // Start the Go server
   const serverPath = isDev
     ? path.join(
-        __dirname,
+        __dirname, // Development mode: relative to `electron/`
         'server',
         process.platform === 'win32' ? 'server.exe' : 'server',
       )
     : path.join(
-        process.resourcesPath,
+        process.resourcesPath, // Production mode: packaged app's resources folder
         'server',
         process.platform === 'win32' ? 'server.exe' : 'server',
       );
