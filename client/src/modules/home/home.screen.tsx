@@ -75,7 +75,7 @@ const Home = observer(() => {
           <span>Clipboard Parser</span>
         </div>
 
-        <div className='flex text-md relative inline-block'>
+        <div className='flex text-md relative'>
           <span id='userId' className='cursor-pointer' onClick={toggleMenu}>
             Welcome
           </span>
@@ -83,11 +83,11 @@ const Home = observer(() => {
           {isOpen && (
             <div
               ref={menuRef}
-              className='absolute right-0 mt-5 w-48 bg-white border rounded-lg shadow-lg'
+              className='absolute right-0 mt-6 w-48 border rounded-lg shadow-lg bg-[#3a3a3a] text-white'
             >
               <ul className='py-2'>
                 <li
-                  className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'
+                  className='px-4 py-2  font-light hover:text-[#00bcd4] cursor-pointer'
                   onClick={() => {
                     setIsSidebarOpen(true);
                     setIsOpen(false);
@@ -95,12 +95,9 @@ const Home = observer(() => {
                 >
                   Account
                 </li>
-                <li className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'>
-                  Change Password
-                </li>
                 <hr />
                 <li
-                  className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'
+                  className='px-4 py-2  font-light hover:text-[#00bcd4] cursor-pointer'
                   onClick={handleSignOut}
                 >
                   Sign out
