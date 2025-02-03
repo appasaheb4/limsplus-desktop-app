@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Menu } from 'electron';
 import * as path from 'path';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
@@ -57,6 +57,9 @@ function createWindow() {
       contextIsolation: false,
     },
   });
+  mainWindow.setMenu(null);
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.autoHideMenuBar = true;
   const user = store.get('user');
   if (user?.userId) {
     mainWindow.webContents.on('did-finish-load', () => {
@@ -81,6 +84,7 @@ app.whenReady().then(() => {
   installExtension(REACT_DEVELOPER_TOOLS)
     .then((name) => console.log(`Added Extension:  ${name}`))
     .catch((err) => console.log('An error occurred: ', err));
+  Menu.setApplicationMenu(null);
   createWindow();
   // app.on('activate', () => {
   //   if (BrowserWindow.getAllWindows().length === 0) {
@@ -191,6 +195,16 @@ ipcMain.handle('read-user', (event) => {
   let user = store.get('user');
   if (user) {
     event.sender.send('send-user', user);
+  }
+});
+
+ipcMain.handle('remove-file', async (event, filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error: any) {
+    console.error('Error removing file:', error);
   }
 });
 
