@@ -13,7 +13,10 @@
     "postinstall": "electron-builder install-app-deps",
     "dev": "yarn build:go && concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
     "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
-    "electron:build": "rm -rf dist && yarn build && tsc -p electron && yarn build:go && mkdir -p electron/server && [ -f electron/server/server ] || cp electron/server/server electron/server/ && electron-builder",
+    "clean:mac": "rm -rf dist",
+    "clean:win": "if exist dist rmdir /s /q dist",
+    "electron:build-mac": "yarn clean:mac && yarn build && tsc -p electron && yarn build:go && mkdir -p electron/server && [ -f electron/server/server ] || cp electron/server/server electron/server/ && electron-builder --mac",
+    "electron:build-win": "yarn clean:win && yarn build && tsc -p electron && yarn build:go && mkdir electron\\server && if not exist electron\\server\\server copy electron\\server\\server electron\\server\\ && electron-builder --win",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "prettier:fix": "prettier --write ."

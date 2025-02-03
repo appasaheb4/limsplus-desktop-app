@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import './style.css';
+import { useNavigate } from 'react-router-dom';
+import AccountModal from './components/modal-account.component';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -13,6 +15,10 @@ type User = {
 
 const Home = observer(() => {
   const { integrationGatewayStore, localStoragePath } = useStores();
+  const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', (_event: IpcRendererEvent, user: User) => {
@@ -26,6 +32,40 @@ const Home = observer(() => {
     });
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const handleSignOut = async () => {
+    const checkFileExists = async (filePath: string) => {
+      return await ipcRenderer.invoke('check-file-exists', filePath);
+    };
+
+    const userDataPath = await ipcRenderer.invoke('get-user-data-path');
+    const filePath = `${userDataPath}/user-preferences.json`;
+
+    const fileExists = await checkFileExists(filePath);
+
+    if (fileExists) {
+      await ipcRenderer.invoke('remove-file', filePath);
+      navigate('/');
+    } else {
+      alert('Something Went Wrong..');
+    }
+  };
+
   return (
     <div className='flex flex-col w-full bg-gradient-to-r from-purple-600 to-blue-500 min-h-screen'>
       <div className='flex header justify-between w-full'>
@@ -34,8 +74,40 @@ const Home = observer(() => {
           <span>Notification</span>
           <span>Clipboard Parser</span>
         </div>
-        <div className='flex text-md'>
-          <span id='userId'>Welcome </span>
+
+        <div className='flex text-md relative inline-block'>
+          <span id='userId' className='cursor-pointer' onClick={toggleMenu}>
+            Welcome
+          </span>
+
+          {isOpen && (
+            <div
+              ref={menuRef}
+              className='absolute right-0 mt-5 w-48 bg-white border rounded-lg shadow-lg'
+            >
+              <ul className='py-2'>
+                <li
+                  className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'
+                  onClick={() => {
+                    setIsSidebarOpen(true);
+                    setIsOpen(false);
+                  }}
+                >
+                  Account
+                </li>
+                <li className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'>
+                  Change Password
+                </li>
+                <hr />
+                <li
+                  className='px-4 py-2 text-black font-light hover:bg-gray-200 cursor-pointer'
+                  onClick={handleSignOut}
+                >
+                  Sign out
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
@@ -127,6 +199,10 @@ const Home = observer(() => {
           </div>
         </div>
       </div>
+      <AccountModal
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
     </div>
   );
 });
