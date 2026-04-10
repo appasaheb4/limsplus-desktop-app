@@ -9,7 +9,7 @@ const MessageStore = require('./messageStore.js');
 const InstrumentLogsStore = require('./instrumentLogsStore');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
-let goServerProcess: any = null;
+let serverProcess: any = null;
 
 // for file upload
 const fs = require('fs');
@@ -92,9 +92,9 @@ app.whenReady().then(() => {
   //   }
   // });
   app.on('window-all-closed', () => {
-    if (goServerProcess) {
-      goServerProcess.kill();
-      goServerProcess = null;
+    if (serverProcess) {
+      serverProcess.kill();
+      serverProcess = null;
     }
     if (process.platform !== 'darwin') {
       app.quit();
@@ -125,36 +125,41 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     childWindows.show();
   });
 
-  // Start the Go server
-  const serverPath = isDev
-    ? path.join(
-        __dirname, // Development mode: relative to `electron/`
-        'server',
-        process.platform === 'win32' ? 'server.exe' : 'server',
-      )
-    : path.join(
-        process.resourcesPath, // Production mode: packaged app's resources folder
-        'server',
-        process.platform === 'win32' ? 'server.exe' : 'server',
-      );
+  // Start the Python server
+  if (isDev) {
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const serverScript = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'server',
+      'main.py',
+    );
+    serverProcess = spawn(pythonCmd, [serverScript], { stdio: 'inherit' });
+  } else {
+    const serverPath = path.join(
+      process.resourcesPath,
+      'server',
+      process.platform === 'win32' ? 'server.exe' : 'server',
+    );
+    serverProcess = spawn(serverPath, [], { stdio: 'inherit' });
+  }
 
-  goServerProcess = spawn(serverPath, [], { stdio: 'inherit' });
-
-  goServerProcess.on('error', (err: string) => {
-    console.error('Failed to start Go server:', err);
+  serverProcess.on('error', (err: string) => {
+    console.error('Failed to start Python server:', err);
   });
 
-  goServerProcess.on('exit', (code: string) => {
-    console.log(`Go server exited with code ${code}`);
+  serverProcess.on('exit', (code: string) => {
+    console.log(`Python server exited with code ${code}`);
   });
 
-  // Stop the Go server when the window is closed
   childWindows.on('closed', () => {
-    if (goServerProcess) {
-      goServerProcess.kill();
-      goServerProcess = null;
+    if (serverProcess) {
+      serverProcess.kill();
+      serverProcess = null;
       console.log(
-        'Go server stopped because the integration-gateway screen was closed.',
+        'Python server stopped because the integration-gateway screen was closed.',
       );
     }
     childWindows = null;
