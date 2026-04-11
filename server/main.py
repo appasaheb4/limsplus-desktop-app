@@ -8,19 +8,13 @@ Handles TCP and serial port connections for instrument integration.
 
 import asyncio
 import codecs
-import logging
-import sys
+from logger import logger
 from typing import Dict, Set
 
 import aiohttp
 from aiohttp import web
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    stream=sys.stdout,
-)
-logger = logging.getLogger(__name__)
+
 
 ws_connections: Set[web.WebSocketResponse] = set()
 tcp_servers: Dict[str, asyncio.AbstractServer] = {}
