@@ -5,3 +5,7 @@
 /client/node_modules
 /client/build
 /client/dist
+/server/dist
+/server/build
+/server/server.spec
+/server/__pycache__
