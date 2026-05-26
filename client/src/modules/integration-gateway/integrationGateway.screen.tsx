@@ -35,13 +35,12 @@ const IntegrationGateway = observer(() => {
   }
 
   useEffect(() => {
-    ipcRenderer.invoke('read-user');
-    ipcRenderer.on('send-user', (_event: IpcRendererEvent, user: User) => {
-      setInputs({
-        ...inputs,
+    const onSendUser = (_event: IpcRendererEvent, user: User) => {
+      setInputs((prev) => ({
+        ...prev,
         companyCode: user.companyCode,
-        environment: user.environment,
-      });
+        environment: user.environment ?? prev.environment,
+      }));
       integrationGatewayStore.integrationGatewayService
         .findByFieldsInstrumentMaster({
           input: { filter: { companyCode: user.companyCode } },
@@ -56,9 +55,15 @@ const IntegrationGateway = observer(() => {
         .catch((error) => {
           console.error('Error:', error);
         });
-    });
+    };
+
+    ipcRenderer.invoke('read-user');
+    ipcRenderer.on('send-user', onSendUser);
     ipcRenderer.send('set-title', 'Integration Gateway');
-  }, []);
+    return () => {
+      ipcRenderer.removeListener('send-user', onSendUser);
+    };
+  }, [integrationGatewayStore]);
 
   const openMessageModal = () => {
     const modal = document.getElementById('messageModal');

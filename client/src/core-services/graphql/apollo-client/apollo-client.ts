@@ -23,7 +23,9 @@ const customFetch = async (
     const response = await fetch(uri, options).then((response) => {
       if (response.status >= 500) {
         apiCount--;
-        return Promise.reject(response.status);
+        return Promise.reject(
+          new Error(`GraphQL upstream HTTP ${response.status}`),
+        );
       }
       if (response) {
         apiCount--;
@@ -39,12 +41,19 @@ const customFetch = async (
   }
 };
 
-const getBaseUrl = (env: string) => {
+/** Prefer `REACT_APP_API_HOST_*` — same physical endpoint as Nest `/graphql`; legacy `REACT_APP_GRAPHQL_HOST_*` still works. */
+const getGraphqlHttpUri = (env: string): string | undefined => {
   switch (env) {
     case 'Production':
-      return process.env.REACT_APP_GRAPHQL_HOST_PORD;
+      return (
+        process.env.REACT_APP_API_HOST_PORD ||
+        process.env.REACT_APP_GRAPHQL_HOST_PORD
+      );
     default:
-      return process.env.REACT_APP_GRAPHQL_HOST_LOCAL;
+      return (
+        process.env.REACT_APP_API_HOST_LOCAL ||
+        process.env.REACT_APP_GRAPHQL_HOST_LOCAL
+      );
   }
 };
 
@@ -57,7 +66,7 @@ const authLink = setContext(async (_, { headers }) => {
         if (token) {
           resolve(token);
         } else {
-          reject('No token received');
+          reject(new Error('No access token stored — sign in again.'));
         }
       },
     );
@@ -81,13 +90,20 @@ const authMiddleware = new ApolloLink((operation, forward) => {
   return forward(operation);
 });
 
-const UploadLink = createUploadLink({
-  uri: getBaseUrl(process.env.REACT_APP_ENV || 'Local'),
-  fetch: customFetch,
-});
+const graphqlUri =
+  getGraphqlHttpUri(process.env.REACT_APP_ENV || 'Local') ?? '';
 
-const UploadLinkLocal = createUploadLink({
-  uri: process.env.REACT_APP_API_HOST_LOCAL,
+if (
+  process.env.NODE_ENV === 'development' &&
+  (!graphqlUri || graphqlUri.trim() === '')
+) {
+  console.warn(
+    '[Apollo] Missing GraphQL URL — set REACT_APP_API_HOST_LOCAL (e.g. http://localhost:8080/graphql) or REACT_APP_GRAPHQL_HOST_LOCAL in client/.env',
+  );
+}
+
+const UploadLink = createUploadLink({
+  uri: graphqlUri,
   fetch: customFetch,
 });
 

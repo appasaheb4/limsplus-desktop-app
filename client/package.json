@@ -12,8 +12,13 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "postinstall": "electron-builder install-app-deps",
-    "dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
-    "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && electron .\"",
+    "dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && cross-env NODE_OPTIONS= electron .\"",
+    "dev:with-devtools": "cross-env LIMSPLUS_OPEN_DEVTOOLS=true yarn dev",
+    "dev:with-rdt": "cross-env LIMSPLUS_REACT_DEVTOOLS=true yarn dev",
+    "dev:debug-ui": "cross-env LIMSPLUS_OPEN_DEVTOOLS=true LIMSPLUS_REACT_DEVTOOLS=true yarn dev",
+    "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && cross-env NODE_OPTIONS= electron .\"",
+    "electron:dev:with-devtools": "cross-env LIMSPLUS_OPEN_DEVTOOLS=true yarn electron:dev",
+    "electron:dev:with-rdt": "cross-env LIMSPLUS_REACT_DEVTOOLS=true yarn electron:dev",
     "clean:mac": "rm -rf dist",
     "clean:win": "rm -rf dist",
     "electron:build-mac": "yarn clean:mac && yarn build && tsc -p electron && yarn build:server && electron-builder --mac",
@@ -32,6 +37,7 @@
     "@types/node": "^18.13.0",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
+    "adm-zip": "^0.5.17",
     "apollo-upload-client": "16.0.0",
     "axios": "^1.7.9",
     "electron-devtools-installer": "^3.2.0",
@@ -41,10 +47,13 @@
     "lodash": "^4.17.21",
     "mobx": "^6.13.5",
     "mobx-react": "^9.2.0",
+    "mongodb": "^7.2.0",
+    "mongodb-memory-server": "^11.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.1.2",
     "react-scripts": "5.0.1",
+    "serve-handler": "^6.1.5",
     "typescript": "^4.9.5",
     "web-vitals": "^3.1.1"
   },
@@ -54,6 +63,10 @@
     "copyright": "Copyright © 2026 LimsPlus",
     "publish": null,
     "extends": null,
+    "asarUnpack": [
+      "**/node_modules/mongodb-memory-server/**/*",
+      "**/node_modules/mongodb-memory-server-core/**/*"
+    ],
     "files": [
       "build/**/*",
       "electron/**/*",
@@ -69,6 +82,27 @@
       {
         "from": "electron/server/",
         "to": "server/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "app/frontend",
+        "to": "portal-build",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "app/backend",
+        "to": "lite-backend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "database",
+        "to": "database",
         "filter": [
           "**/*"
         ]

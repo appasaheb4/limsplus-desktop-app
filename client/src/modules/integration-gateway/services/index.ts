@@ -20,7 +20,18 @@ export class IntegrationGatewayService {
         });
       }
     } catch (error) {
-      throw error;
+      const message =
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof (error as { message: unknown }).message === 'string'
+          ? (error as { message: string }).message
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      throw new Error(
+        `[IntegrationGateway] fetchEnvironment failed: ${message}`,
+      );
     }
   }
 

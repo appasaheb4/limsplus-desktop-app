@@ -17,13 +17,15 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    ipcRenderer.invoke('read-user');
-    ipcRenderer.on('send-user', (_event: IpcRendererEvent, userData: User) => {
+    const onSendUser = (_event: IpcRendererEvent, userData: User) => {
       setUser(userData);
-    });
+    };
+
+    ipcRenderer.invoke('read-user');
+    ipcRenderer.on('send-user', onSendUser);
 
     return () => {
-      ipcRenderer.removeAllListeners('send-user');
+      ipcRenderer.removeListener('send-user', onSendUser);
     };
   }, []);
 

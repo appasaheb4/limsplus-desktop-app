@@ -21,7 +21,14 @@ const Login = observer(() => {
     ipcRenderer.on('user', (_event: IpcRendererEvent, user: User) => {
       if (user.userId) navigate('/dashboard');
     });
-    loginStore.loginService.getCompanyList();
+    void loginStore.loginService
+      .getCompanyList()
+      .catch((err: unknown) => {
+        console.warn(
+          '[Login] getCompanyList failed (REST unreachable or wrong env):',
+          err,
+        );
+      });
     return () => {
       ipcRenderer.removeAllListeners('user');
     };
@@ -83,7 +90,7 @@ const Login = observer(() => {
             onBlur={(e) => {
               const username = e.target.value;
               if (username)
-                loginStore.loginService
+                void loginStore.loginService
                   .userFindByFields({
                     username: username?.toUpperCase(),
                     companyCode: loginStore.login.companyCode,
@@ -94,6 +101,9 @@ const Login = observer(() => {
                     } else {
                       alert(response?.message);
                     }
+                  })
+                  .catch((err: unknown) => {
+                    console.warn('[Login] userFindByFields failed:', err);
                   });
             }}
           />
@@ -142,7 +152,7 @@ const Login = observer(() => {
           type='submit'
           className='w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium py-2 rounded-lg hover:from-purple-700 hover:to-blue-600 transition-all duration-300'
           onClick={async () => {
-            loginStore.loginService
+            void loginStore.loginService
               .login(loginStore.login)
               .then((response: any) => {
                 if (response?.success) {
@@ -159,6 +169,14 @@ const Login = observer(() => {
                 } else {
                   alert(response?.message);
                 }
+              })
+              .catch((err: unknown) => {
+                console.warn('[Login] login failed:', err);
+                alert(
+                  err instanceof Error
+                    ? err.message
+                    : 'Unable to reach the login API. Check REACT_APP_REST_API_HOST_* and that the backend is running.',
+                );
               });
           }}
         >

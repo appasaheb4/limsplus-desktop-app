@@ -1,32 +1,64 @@
 .header {
   display: flex;
-  padding: 10px;
-  background-color: #3a3a3a;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: #2a2a2a;
   color: #cccccc;
-  font-weight: bold;
+  font-weight: 600;
   font-size: 14px;
-  border-bottom: 1px solid #555;
+  border-bottom: 1px solid #444;
+  flex-shrink: 0;
 }
 
 .header span {
-  margin-right: 20px;
   cursor: pointer;
   position: relative;
-  padding-bottom: 5px;
 }
 
-.header span:hover {
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  background-color: #242424;
+  border-right: 1px solid #444;
+  padding: 12px 0;
+}
+
+.sidebar-nav-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  padding: 8px 16px 4px;
+}
+
+.sidebar-nav-item {
+  margin: 2px 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: calc(100% - 16px);
+}
+
+.sidebar-nav-item:hover {
+  background-color: #333;
   color: #00bcd4;
 }
 
-.header span.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: #00bcd4;
+.sidebar-nav-item.active {
+  background-color: #1a3a42;
+  color: #00bcd4;
+  box-shadow: inset 3px 0 0 #00bcd4;
 }
 
 .item {

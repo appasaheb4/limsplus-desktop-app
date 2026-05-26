@@ -10,6 +10,31 @@ const headers: Readonly<Record<string, string | boolean>> = {
   'Access-Control-Allow-Methods': '*',
 };
 
+/** Interceptors used to `reject({})` / return `response.data` on errors — CRA then shows `[object Object]`. */
+function rejectReadably(prefix: string, error: unknown): Promise<never> {
+  if (Axios.isAxiosError(error)) {
+    const res = error.response;
+    const d = res?.data;
+    let extracted: string | null = null;
+    if (d && typeof d === 'object' && !Array.isArray(d)) {
+      const m = (d as { message?: unknown }).message;
+      if (typeof m === 'string') extracted = m;
+    }
+    if (extracted === null && typeof d === 'string') extracted = d;
+    const msg =
+      extracted || error.message || prefix || `HTTP ${res?.status ?? '?'}`;
+    return Promise.reject(new Error(msg));
+  }
+  if (error instanceof Error) return Promise.reject(error);
+  return Promise.reject(
+    new Error(
+      typeof error === 'string'
+        ? error
+        : `${prefix}: ${JSON.stringify(error)}`,
+    ),
+  );
+}
+
 export class Service {
   private instance: AxiosInstance | null = null;
   accessToken!: string;
@@ -19,14 +44,14 @@ export class Service {
   }
 
   private get service(): AxiosInstance {
-    return this.instance != null ? this.instance : this.initService();
+    return this.instance !== null ? this.instance : this.initService();
   }
 
   initService() {
     const service = Axios.create({
       baseURL: this.baseURL,
       headers:
-        this.baseURL != 'https://limsplus-service.azurewebsites.net/api'
+        this.baseURL !== 'https://limsplus-service.azurewebsites.net/api'
           ? {
               // header hide buz pin code wise address not fetch
               ...headers,
@@ -45,12 +70,7 @@ export class Service {
       },
       (error) => {
         stores.setLoading(false);
-        const { response } = error;
-        if (!response) {
-          return Promise.reject({
-            status: 500,
-          });
-        }
+        return rejectReadably('Request error', error);
       },
     );
 
@@ -61,18 +81,10 @@ export class Service {
       },
       (error) => {
         stores.setLoading(false);
-        const { response } = error;
         if (Axios.isCancel(error)) {
-          return Promise.reject({
-            status: 408,
-          });
-        } else if (!response) {
-          return Promise.reject({
-            status: 500,
-          });
+          return Promise.reject(new Error('Request cancelled'));
         }
-        const { data: errorMessage } = response;
-        return errorMessage;
+        return rejectReadably('Request failed', error);
       },
     );
     return service;
