@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "client/main.js",
   "scripts": {
-    "build-react": "cd app && npm install && npm run build",
-    "copy-react-build": "xcopy /E /I /Y .\\app\\build .\\client\\app\\build",
+    "build-react": "cd ../limsplus-portal && yarn build",
+    "copy-react-build": "rm -rf client/app/build && mkdir -p client/app && cp -R ../limsplus-portal/build client/app/build",
     "build-server": "cd client && node build-server.js",
     "build:client:win": "cd client && npm install && npm run electron:build-win",
     "build:client:mac": "cd client && npm install && npm run electron:build-mac",
