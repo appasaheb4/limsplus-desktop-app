@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-/** Old service builds called `listen(8080)`, which ignores desktop `PORT` (e.g. 55210). */
+/** Old service builds called `listen(8080)` only; Lite now passes **`PORT`** from Electron (still often **8080** after freeing the port). */
 function patchNestMainListenIfLegacy8080(backendRoot) {
   const mainJsPath = path.join(backendRoot, 'main.js');
   if (!fs.existsSync(mainJsPath)) return false;

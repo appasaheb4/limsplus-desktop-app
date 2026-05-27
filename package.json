@@ -1,6 +1,6 @@
 {
   "name": "limsplus-desktop-app",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "main": "client/main.js",
   "scripts": {
     "build-react": "cd ../limsplus-portal && yarn build",
