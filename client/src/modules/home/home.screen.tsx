@@ -156,7 +156,7 @@ const LIMS_LITE_SETUP_STEPS = [
   {
     title: 'Start NestJS API locally',
     blurb:
-      'Listens on loopback using PORT/HOST from the desktop shell (default port 55210). First startup can take a few minutes if optional integrations load.',
+      'Listens on loopback using PORT/HOST from the desktop shell (default port 8080). First startup can take a few minutes if optional integrations load.',
   },
   {
     title: 'Save offline connection file',

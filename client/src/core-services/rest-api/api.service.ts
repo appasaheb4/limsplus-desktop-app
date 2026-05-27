@@ -2,6 +2,7 @@ import Axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import _ from 'lodash';
 import { ServiceResponse } from './response-handle.service';
 import { stores } from '../../stores';
+import { getLimsLiteApiBase } from '../../runtime/lims-lite-bootstrap';
 
 const headers: Readonly<Record<string, string | boolean>> = {
   Accept: 'application/json',
@@ -169,6 +170,10 @@ export class Service {
 }
 
 const getBaseUrl = (env: string): string => {
+  const lite = getLimsLiteApiBase();
+  if (lite) {
+    return `${lite}/api`;
+  }
   switch (env) {
     case 'Production':
       return process.env.REACT_APP_REST_API_HOST_PORD!;

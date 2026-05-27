@@ -8,6 +8,7 @@ import {
   session,
 } from 'electron';
 import * as http from 'http';
+import * as https from 'https';
 import * as path from 'path';
 import {
   ensureLiteMongoRunning,
@@ -18,8 +19,9 @@ import {
   getLiteMongoPlatformSummary,
   getLiteExternalMongoUriFromEnv,
   redactMongoUriForLogs,
-  LIMS_LITE_MONGO_FIXED_PORT,
+  mongoTcpListenPortHint,
   LIMS_LITE_MONGO_LOOPBACK_BIND,
+  LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT,
 } from './offlineLimsLite';
 import {
   getLiteBackendEntryPath,
@@ -66,10 +68,205 @@ function stopLimsPortalStaticServer(): void {
   }
 }
 
-function startLimsPortalStaticServer(buildRootAbs: string): Promise<string> {
+/** Passes spawned Nest loopback URL into CRA via query; bootstrap captures it → sessionStorage. */
+function appendPortalLiteApiBaseQuery(
+  portalUrl: string,
+  liteApiBaseUrl: string,
+): string {
+  const trimmed = liteApiBaseUrl.replace(/\/$/, '');
+  const u = new URL(portalUrl);
+  u.searchParams.delete('limsplusLiteApiBase');
+  u.searchParams.delete('liteApiBase');
+  u.searchParams.set('limsplusLiteApiBase', trimmed);
+  return u.toString();
+}
+
+const HOP_BY_HOP_REQUEST_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
+]);
+
+/** Path portion of `GET /graphql?x=1`-style URLs (no fragment). */
+function httpPathOnly(rawUrl: string | undefined): string {
+  const u = rawUrl || '/';
+  const q = u.indexOf('?');
+  const pathPart = q === -1 ? u : u.slice(0, q);
+  return pathPart.startsWith('/') ? pathPart : `/${pathPart}`;
+}
+
+function stripTrailingSlashExceptRoot(pathname: string): string {
+  if (pathname !== '/' && pathname.endsWith('/')) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+/** Pathname on the lite static origin that should proxy to Nest (e.g. `/graphql`). */
+function liteGraphqlPathFromUpstream(upstreamAbsolute: string): string {
+  try {
+    let p = httpPathOnly(new URL(upstreamAbsolute).pathname);
+    return stripTrailingSlashExceptRoot(p) || '/graphql';
+  } catch {
+    return '/graphql';
+  }
+}
+
+function requestTargetsLiteGraphql(
+  rawReqUrl: string | undefined,
+  liteGraphqlPath: string,
+): boolean {
+  return (
+    stripTrailingSlashExceptRoot(httpPathOnly(rawReqUrl)) ===
+    stripTrailingSlashExceptRoot(liteGraphqlPath)
+  );
+}
+
+function forwardHeadersToUpstream(
+  from: http.IncomingHttpHeaders,
+  hostHeader: string,
+): http.OutgoingHttpHeaders {
+  const out: http.OutgoingHttpHeaders = {};
+  for (const [key, val] of Object.entries(from)) {
+    if (val === undefined) continue;
+    const lk = key.toLowerCase();
+    if (HOP_BY_HOP_REQUEST_HEADERS.has(lk)) continue;
+    if (lk === 'host') continue;
+    out[key] = val;
+  }
+  out.host = hostHeader;
+  return out;
+}
+
+function sanitizeProxyResponseHeaders(
+  from: http.IncomingHttpHeaders,
+): http.OutgoingHttpHeaders {
+  const out = { ...from } as http.OutgoingHttpHeaders;
+  delete out.connection;
+  delete out['transfer-encoding'];
+  delete out['keep-alive'];
+  return out;
+}
+
+/**
+ * Forwards `/graphql` (multipart or JSON) from the CRA static origin to Nest on
+ * `{liteApiBaseUrl}/graphql`, avoiding `serve-handler` SPA rewrites returning HTML for JSON parsers.
+ */
+function proxyNestGraphql(
+  nestGraphqlAbsolute: string,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): void {
+  let targetUrl: URL;
+  try {
+    targetUrl = new URL(nestGraphqlAbsolute);
+  } catch (e: unknown) {
+    console.error('[LimsPlus Lite] Invalid Nest GraphQL URL', e);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.end('Invalid GraphQL upstream URL');
+    }
+    return;
+  }
+
+  const isHttps = targetUrl.protocol === 'https:';
+  const proto = isHttps ? https : http;
+  const portNum =
+    targetUrl.port !== ''
+      ? Number.parseInt(targetUrl.port, 10)
+      : isHttps
+        ? 443
+        : 80;
+
+  const rawReq = req.url || '/';
+  const qStart = rawReq.indexOf('?');
+  const query = qStart === -1 ? '' : rawReq.slice(qStart);
+  let upstreamPath = stripTrailingSlashExceptRoot(httpPathOnly(targetUrl.pathname));
+  if (upstreamPath === '') {
+    upstreamPath = '/graphql';
+  }
+  upstreamPath += query;
+
+  const upstreamHostHeader =
+    targetUrl.host ||
+    `${targetUrl.hostname}:${targetUrl.port || (isHttps ? '443' : '80')}`;
+
+  const opts: https.RequestOptions = {
+    hostname: targetUrl.hostname,
+    port: portNum,
+    path: upstreamPath,
+    method: req.method || 'GET',
+    headers: forwardHeadersToUpstream(req.headers, upstreamHostHeader),
+    timeout: 120_000,
+  };
+
+  const preq = proto.request(opts, (pres: http.IncomingMessage) => {
+    if (!pres.statusCode) {
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.end('Bad gateway (no upstream status)');
+      }
+      return;
+    }
+    try {
+      res.writeHead(pres.statusCode, sanitizeProxyResponseHeaders(pres.headers));
+    } catch {
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.end('Bad gateway');
+      }
+      return;
+    }
+    pres.on('error', (e: unknown) => {
+      console.error('[LimsPlus Lite GraphQL proxy] upstream response stream', e);
+      if (!res.headersSent) {
+        res.destroy();
+      } else {
+        res.socket?.destroy?.();
+      }
+    });
+    pres.pipe(res);
+  });
+
+  req.on('aborted', () => {
+    preq.destroy();
+  });
+
+  req.on('error', (e: unknown) => {
+    console.error('[LimsPlus Lite GraphQL proxy] client request error', e);
+    preq.destroy();
+  });
+
+  preq.on('error', (e: unknown) => {
+    console.error('[LimsPlus Lite GraphQL proxy]', e);
+    if (!res.headersSent) {
+      res.statusCode = 502;
+      res.end('Lite GraphQL proxy: upstream unreachable');
+    } else {
+      res.socket?.destroy?.();
+    }
+  });
+
+  preq.flushHeaders?.();
+  req.pipe(preq);
+}
+
+function startLimsPortalStaticServer(
+  buildRootAbs: string,
+  nestGraphqlAbsolute?: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     stopLimsPortalStaticServer();
     const buildRootNorm = path.resolve(buildRootAbs);
+
+    const liteGraphqlPath = nestGraphqlAbsolute
+      ? liteGraphqlPathFromUpstream(nestGraphqlAbsolute)
+      : '';
 
     const server = http.createServer((req, res) => {
       if (!app.isPackaged) {
@@ -82,6 +279,15 @@ function startLimsPortalStaticServer(buildRootAbs: string): Promise<string> {
           );
         });
       }
+
+      if (
+        nestGraphqlAbsolute &&
+        requestTargetsLiteGraphql(req.url, liteGraphqlPath)
+      ) {
+        proxyNestGraphql(nestGraphqlAbsolute, req, res);
+        return;
+      }
+
       void serveHandler(req, res, {
         public: buildRootNorm,
         directoryListing: false,
@@ -390,10 +596,10 @@ async function ensureLocalLimsPlusLiteWindowOpen(
     );
 
   /**
-   * Lite SPA (`http://127.0.0.1:<port>`/dynamic) talks to Nest GraphQL (`http://localhost:…`/55210…) —
-   * different origins ⇒ CORS preflight failures unless Nest whitelists every portal origin OR this
-   * isolated window skips same-origin enforcement (recommended for offline desktop loopback only).
-   * Set **`LIMSPLUS_LITE_STRICT_WEB_SECURITY=1`** to keep `webSecurity` on (then configure Nest CORS).
+   * Lite SPA (`http://127.0.0.1:<dynamic-spa-port>`) vs Nest (`http://127.0.0.1:<api-port>`) are different origins
+   * unless you merge them behind one listener — **`limsplusLiteApiBase`** avoids wrong fixed ports when CRA and Nest diverge (**`8080`**, ephemeral, …).
+   * CORS preflights hit unless Nest allows the portal origin or this window skips **`webSecurity`** (default for offline Lite).
+   * Set **`LIMSPLUS_LITE_STRICT_WEB_SECURITY=1`** to keep **`webSecurity`** on (configure Nest **`enableCors`**).
    */
   const liteStrictWebSecurity =
     process.env.LIMSPLUS_LITE_STRICT_WEB_SECURITY === '1' ||
@@ -571,15 +777,19 @@ ipcMain.handle(
         emitLitePhase(
           wc,
           2,
-          `Downloading or starting MongoDB on ${LIMS_LITE_MONGO_LOOPBACK_BIND}:${LIMS_LITE_MONGO_FIXED_PORT} (loopback only — not reachable from other PCs; first launch may download server files)...`,
+          `Downloading or starting MongoDB (${LIMS_LITE_MONGO_LOOPBACK_BIND}, default tcp ${LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT} — stops other listeners on that port unless LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1; first launch may download server files)...`,
         );
       }
 
       let mongoUri: string;
+      let liteMongoTcpPortForJson: number | null = null;
       if (externalMongoUri) {
         mongoUri = externalMongoUri;
+        liteMongoTcpPortForJson = mongoTcpListenPortHint(mongoUri);
       } else {
-        mongoUri = await ensureLiteMongoRunning();
+        const embedded = await ensureLiteMongoRunning();
+        mongoUri = embedded.mongoUri;
+        liteMongoTcpPortForJson = embedded.listenPort;
       }
 
       emitLitePhase(
@@ -600,9 +810,7 @@ ipcMain.handle(
       emitLitePhase(
         wc,
         3,
-        alreadyRestored
-          ? 'Database already imported earlier — verifying...'
-          : 'Importing backup from ZIP / database folder — first time only...',
+        'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
       );
 
       let restoreOutcome;
@@ -665,7 +873,7 @@ ipcMain.handle(
             mongoUri,
             database: restoreOutcome.databaseName,
             bindIp: LIMS_LITE_MONGO_LOOPBACK_BIND,
-            liteMongoPort: LIMS_LITE_MONGO_FIXED_PORT,
+            liteMongoPort: liteMongoTcpPortForJson,
             apiBaseUrl: liteApiBaseUrl,
             liteApiPort,
             networkScope: 'loopback-only-not-exposed-outside-this-machine',
@@ -677,8 +885,15 @@ ipcMain.handle(
 
       const portalRoot = path.dirname(indexPath);
       try {
-        const baseUrl = await startLimsPortalStaticServer(portalRoot);
-        const portalUrl = `${baseUrl}/`;
+        const nestGraphqlUrl = `${liteApiBaseUrl.replace(/\/$/, '')}/graphql`;
+        const baseUrl = await startLimsPortalStaticServer(
+          portalRoot,
+          nestGraphqlUrl,
+        );
+        const portalUrl = appendPortalLiteApiBaseQuery(
+          `${baseUrl}/`,
+          liteApiBaseUrl,
+        );
         emitLitePhase(
           wc,
           6,

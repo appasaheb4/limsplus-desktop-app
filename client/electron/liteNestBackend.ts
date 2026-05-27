@@ -3,14 +3,17 @@ import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as path from 'path';
+import { resolveExclusiveLoopbackTcpPort } from './exclusiveLoopbackTcpPort';
 
 /** Nest / GraphQL API for LimsPlus Lite — loopback only. */
 export const LIMS_LITE_API_HOST = '127.0.0.1';
 
-export function getLiteNestListenPort(): number {
-  const p = Number.parseInt(process.env.LIMS_LITE_API_PORT ?? '55210', 10);
-  return Number.isFinite(p) && p > 0 ? p : 55210;
-}
+/**
+ * Default Nest HTTP port (**8080**) when {@link process.env.LIMS_LITE_API_PORT} is unset.
+ * Conflicts: other listeners on that port are stopped unless **`LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_API_PORT=1`**.
+ * **`LIMS_LITE_API_PORT=auto`** or **`0`** → OS ephemeral port.
+ */
+export const LIMS_LITE_API_DEFAULT_PREFERRED_PORT = 8080;
 
 let nestLiteChild: ChildProcess | null = null;
 
@@ -81,6 +84,19 @@ function waitForHttpAnyResponse(
 }
 
 /**
+ * `mongodb://127.0.0.1:27017//limsplus-prod` (double slash) makes some drivers /
+ * Mongoose treat the DB name oddly; normalize to exactly one slash before the DB segment.
+ */
+function sanitizeMongoDupSlashesAfterAuthority(uri: string): string {
+  const t = uri.trim();
+  if (!/^mongodb(?:\+srv)?:\/\//i.test(t)) return uri;
+  return t.replace(
+    /(mongodb(?:\+srv)?:\/\/[^/?#]+)(\/{2,})(?=\?|$|[^\s?#])/gi,
+    '$1/',
+  );
+}
+
+/**
  * limsplus-service resolves Mongo via `getMongodbUrl(process.env.ENV)` → e.g.
  * `MONGODB_URL_LOCAL` when `ENV` is `Local`. Also ensure the default DB name is in the URI for Mongoose.
  */
@@ -88,14 +104,16 @@ function mongoConnectionStringWithDatabase(
   mongoUri: string,
   databaseName: string,
 ): string {
-  const uri = mongoUri.trim();
+  const uri = sanitizeMongoDupSlashesAfterAuthority(mongoUri.trim());
   const db = (databaseName || 'limsplus-prod').trim();
   if (!uri || !db) return uri;
 
   const m =
     /^((mongodb(?:\+srv)?):\/\/[^/?]+)(\/[^?]*)?(\?.*)?$/i.exec(uri);
   if (!m) {
-    return uri.replace(/\/+$/, '') + `/${encodeURIComponent(db)}`;
+    return sanitizeMongoDupSlashesAfterAuthority(
+      uri.replace(/\/+$/, '') + `/${encodeURIComponent(db)}`,
+    );
   }
   const base = m[1];
   const existingPath = m[3] ?? '';
@@ -104,9 +122,11 @@ function mongoConnectionStringWithDatabase(
   const pathHasDb =
     pathAfterSlash.length > 0 && !pathAfterSlash.includes('/');
   if (pathHasDb) {
-    return uri;
+    return sanitizeMongoDupSlashesAfterAuthority(uri);
   }
-  return `${base}/${encodeURIComponent(db)}${query}`;
+  return sanitizeMongoDupSlashesAfterAuthority(
+    `${base}/${encodeURIComponent(db)}${query}`,
+  );
 }
 
 /**
@@ -133,7 +153,18 @@ export async function startLiteNestBackend(options: {
     options.databaseName,
   );
 
-  const port = getLiteNestListenPort();
+  const skipKillApiPort =
+    process.env.LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_API_PORT === '1' ||
+    process.env.LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_API_PORT === 'true';
+
+  const port = await resolveExclusiveLoopbackTcpPort({
+    rawPortEnv: process.env.LIMS_LITE_API_PORT,
+    defaultPort: LIMS_LITE_API_DEFAULT_PREFERRED_PORT,
+    skipKillOccupiers: skipKillApiPort,
+    roleLabel: 'Nest API',
+    portEnvVarName: 'LIMS_LITE_API_PORT',
+    skipKillEnvVarName: 'LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_API_PORT',
+  });
   const useSystemNode =
     process.env.LIMS_LITE_USE_SYSTEM_NODE === '1' ||
     process.env.LIMS_LITE_USE_SYSTEM_NODE === 'true';
@@ -145,11 +176,18 @@ export async function startLiteNestBackend(options: {
     ENV: 'Local',
     PORT: String(port),
     HOST: LIMS_LITE_API_HOST,
+    /**
+     * Highest-priority URIs so Lite wins over stale `backend/.env` (`MONGODB_URL_LOCAL`, etc.).
+     * `core-utils/database.util` checks `LIMSPLUS_LITE_EMBEDDED_MONGO_URI` first.
+     */
+    LIMSPLUS_LITE_EMBEDDED_MONGO_URI: mongoForNest,
     MONGODB_URL_LOCAL: mongoForNest,
     MONGODB_URL_DEV: mongoForNest,
     MONGODB_URL_PROD: mongoForNest,
     MONGODB_URL_DOCKER: mongoForNest,
     MONGODB_URI: mongoForNest,
+    /** `config/config` reads bare `MONGODB_URL`; keep aligned with embedded mongod URI. */
+    MONGODB_URL: mongoForNest,
     DATABASE_URL: mongoForNest,
     MONGO_DATABASE: options.databaseName,
     LIMS_LITE_MONGO_DATABASE: options.databaseName,

@@ -1,8 +1,10 @@
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { BSON, MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { resolveExclusiveLoopbackTcpPort } from './exclusiveLoopbackTcpPort';
 // adm-zip CommonJS (avoid @types/adm-zip vs Electron @types/node clashes)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const AdmZip = require('adm-zip');
@@ -12,7 +14,20 @@ const BSON_BATCH = 250;
 
 /** Embedded mongod listens only here (loopback — not exposed on LAN). */
 const LITE_MONGO_BIND_IP = '127.0.0.1';
-const LITE_MONGO_PORT = 52701;
+
+/** Default embedded `mongod` TCP (**27017**). If busy, Lite stops other listeners on that port unless **`LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1`**. */
+export const LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT = 27017;
+
+/**
+ * Stable default for docs / diagnostics only (same as {@link LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT}).
+ */
+export const LIMS_LITE_MONGO_FIXED_PORT =
+  LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT;
+
+export type EmbeddedLiteMongoReady = {
+  mongoUri: string;
+  listenPort: number;
+};
 
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
@@ -125,15 +140,23 @@ function shouldUseSystemMongod(): boolean {
  * OS-specific MongoMemoryServer options.
  *
  * SECURITY: `instance.ip` is loopback only — Mongo does not bind to every
- * interface; other computers cannot reach port LITE_MONGO_PORT over the LAN.
+ * interface; other computers cannot reach chosen `instance.port` over the LAN.
  *
  * Do not pass extra `--bind_ip` args — MMS already adds `--bind_ip` from
  * `instance.ip`; duplicates cause mongod exit code 2.
  */
-function buildLiteMongoMemoryServerConfig(dbPath: string) {
-  const systemPath = resolveBundledSystemMongodBinary();
-  const systemBinary =
-    shouldUseSystemMongod() && systemPath ? systemPath : undefined;
+function buildLiteMongoMemoryServerConfig(
+  dbPath: string,
+  tcpPort: number,
+  opts?: { forceSystemBinary?: string },
+) {
+  let systemBinary: string | undefined;
+  if (opts?.forceSystemBinary) {
+    systemBinary = opts.forceSystemBinary;
+  } else if (shouldUseSystemMongod()) {
+    const systemPath = resolveBundledSystemMongodBinary();
+    if (systemPath) systemBinary = systemPath;
+  }
 
   const startupTimeoutMs = isWin ? 180_000 : 120_000;
 
@@ -146,7 +169,7 @@ function buildLiteMongoMemoryServerConfig(dbPath: string) {
     instance: {
       dbPath,
       ip: LITE_MONGO_BIND_IP,
-      port: LITE_MONGO_PORT,
+      port: tcpPort,
       launchTimeout: startupTimeoutMs,
     },
   };
@@ -158,6 +181,7 @@ export function getLiteMongoPlatformSummary(): {
   arch: string;
   bindIp: string;
   mongoPort: number;
+  mongoEmbeddedRetriedSystemMongod: boolean;
   downloadCacheHint: string;
   systemMongodDetected: string | null;
   usingSystemMongod: boolean;
@@ -168,20 +192,38 @@ export function getLiteMongoPlatformSummary(): {
     platform: process.platform,
     arch: process.arch,
     bindIp: LITE_MONGO_BIND_IP,
-    mongoPort: LITE_MONGO_PORT,
+    mongoPort: memoryServer
+      ? embeddedMongoListenTcpPort
+      : LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT,
+    mongoEmbeddedRetriedSystemMongod: embeddedMongoViaSystemFallback,
     downloadCacheHint: path.join(
       app.getPath('userData'),
       'mongodb-memory-downloads',
     ),
     systemMongodDetected: detected,
-    usingSystemMongod: Boolean(shouldUseSystemMongod() && detected),
+    usingSystemMongod:
+      embeddedMongoViaSystemFallback ||
+      Boolean(shouldUseSystemMongod() && detected),
     networkScopeNote:
       'MongoDB listens only on loopback — not reachable from LAN/WAN.',
   };
 }
 
 export const LIMS_LITE_MONGO_LOOPBACK_BIND = LITE_MONGO_BIND_IP;
-export const LIMS_LITE_MONGO_FIXED_PORT = LITE_MONGO_PORT;
+
+/** Best-effort TCP port embedded in standard `mongodb://…` URIs (`null` for `mongodb+srv`, etc.). */
+export function mongoTcpListenPortHint(uri: string): number | null {
+  try {
+    if (/^mongodb\+srv:/i.test(uri)) return null;
+    const stripped = uri.split('?')[0].replace(/^mongodb:/i, 'http:');
+    const u = new URL(stripped);
+    const raw = u.port;
+    const p = raw ? Number.parseInt(raw, 10) : 27017;
+    return Number.isFinite(p) ? p : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Skip embedded MongoDB Memory Server — use existing mongod / Atlas-style URI instead
@@ -212,6 +254,10 @@ export type RestoreDumpResult =
 
 /** mongodb-memory-server process; WiredTiger files live under dbPath below. */
 let memoryServer: MongoMemoryServer | null = null;
+/** TCP port MMS bound for this session (`0` until first embedded start). */
+let embeddedMongoListenTcpPort = 0;
+/** True when MMS bundled binary failed and we retried with a detected system `mongod`. */
+let embeddedMongoViaSystemFallback = false;
 
 function getMongoDataPath(): string {
   return path.join(app.getPath('userData'), 'lims-lite-mongodb');
@@ -228,6 +274,8 @@ export async function stopLiteMongoServer(): Promise<void> {
       console.error('offlineLimsLite: stop mongo', e);
     }
     memoryServer = null;
+    embeddedMongoListenTcpPort = 0;
+    embeddedMongoViaSystemFallback = false;
   }
 }
 
@@ -235,16 +283,67 @@ export function isLiteMongoServerActive(): boolean {
   return memoryServer !== null;
 }
 
+/**
+ * **`LIMS_LITE_MONGO_PORT`** when set, else **27017**. **`auto`** / **`0`** → ephemeral.
+ * Unless **`LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1`**, stops other listeners on that port.
+ */
+async function resolveEmbeddedMongoListenPort(): Promise<number> {
+  const skipKill =
+    process.env.LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT === '1' ||
+    process.env.LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT === 'true';
+
+  return resolveExclusiveLoopbackTcpPort({
+    rawPortEnv: process.env.LIMS_LITE_MONGO_PORT,
+    defaultPort: LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT,
+    skipKillOccupiers: skipKill,
+    roleLabel: 'MongoDB',
+    portEnvVarName: 'LIMS_LITE_MONGO_PORT',
+    skipKillEnvVarName: 'LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT',
+  });
+}
+
 /** Start persisted embedded mongod once per app session (reuse data dir between runs). */
-export async function ensureLiteMongoRunning(): Promise<string> {
+export async function ensureLiteMongoRunning(): Promise<EmbeddedLiteMongoReady> {
   if (!memoryServer) {
     const dbPath = getMongoDataPath();
     fs.mkdirSync(dbPath, { recursive: true });
-    memoryServer = await MongoMemoryServer.create(
-      buildLiteMongoMemoryServerConfig(dbPath),
-    );
+    const port = await resolveEmbeddedMongoListenPort();
+    embeddedMongoListenTcpPort = port;
+    embeddedMongoViaSystemFallback = false;
+
+    try {
+      memoryServer = await MongoMemoryServer.create(
+        buildLiteMongoMemoryServerConfig(dbPath, port),
+      );
+    } catch (firstErr) {
+      const details =
+        firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const sys = resolveBundledSystemMongodBinary();
+
+      if (!shouldUseSystemMongod() && sys) {
+        console.warn(
+          '[LimsPlus Lite] Embedded Mongo (downloaded MMS binary) failed; retrying once with local mongod:',
+          details,
+          'binary:',
+          sys,
+        );
+        embeddedMongoViaSystemFallback = true;
+        memoryServer = await MongoMemoryServer.create(
+          buildLiteMongoMemoryServerConfig(dbPath, port, {
+            forceSystemBinary: sys,
+          }),
+        );
+      } else {
+        throw new Error(
+          `Embedded Mongo failed: ${details}\n\nTry one of:\n• Start MongoDB locally, then export LIMSPLUS_LITE_EXTERNAL_MONGO_URI=mongodb://127.0.0.1:27017/${DEFAULT_LITE_DB_NAME}\n• Set LIMSPLUS_USE_SYSTEM_MONGOD=1 to force mongodb-memory-server to use Homebrew/System mongod (detected: ${sys ?? 'none'}).`,
+        );
+      }
+    }
   }
-  return memoryServer.getUri();
+  return {
+    mongoUri: memoryServer.getUri(),
+    listenPort: embeddedMongoListenTcpPort,
+  };
 }
 
 /**
@@ -279,19 +378,47 @@ export async function waitUntilLiteMongoAcceptsConnections(
   }
 
   throw new Error(
-    `MongoDB did not accept connections within ${limit}ms. First launch binary download / disk may be slow — retry or set LIMS_LITE_MONGO_PING_TIMEOUT_MS.`,
+    `MongoDB did not accept connections within ${limit}ms. First launch binary download / disk may be slow — increase LIMS_LITE_MONGO_PING_TIMEOUT_MS.\nAlternatively use local mongod: LIMSPLUS_LITE_EXTERNAL_MONGO_URI, or embedded retry: LIMSPLUS_USE_SYSTEM_MONGOD=1.`,
   );
 }
 
-function bsonFileToDocuments(filePath: string): Record<string, unknown>[] {
-  const buf = fs.readFileSync(filePath);
+function isMongoLeafBsonDumpFile(fname: string): boolean {
+  if (fname.startsWith('.')) return false;
+  const ll = fname.toLowerCase();
+  if (ll.endsWith('.bson.gz')) return true;
+  return ll.endsWith('.bson') && !ll.endsWith('.bson.gz');
+}
+
+function readMongoLeafBsonFileBuffer(fileAbsPath: string): Buffer {
+  const raw = fs.readFileSync(fileAbsPath);
+  const ll = fileAbsPath.toLowerCase();
+  if (ll.endsWith('.bson.gz')) {
+    try {
+      return zlib.gunzipSync(raw);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Gunzip failed for ${fileAbsPath}: ${msg} (mongodump --gzip .bson.gz? Corrupt ZIP?)`,
+      );
+    }
+  }
+  return raw;
+}
+
+/** Multi-document bson file parsing (classic mongorestore `--dir` dumps). */
+function bsonDocumentsFromBuffer(
+  buf: Buffer,
+  diagnosticLabel: string,
+): Record<string, unknown>[] {
   const docs: Record<string, unknown>[] = [];
   let offset = 0;
   while (offset < buf.length) {
     if (buf.length - offset < 5) break;
     const bsonSize = buf.readInt32LE(offset);
     if (bsonSize < 5 || bsonSize > buf.length - offset) {
-      throw new Error(`Invalid BSON size at offset ${offset} in ${filePath}`);
+      throw new Error(
+        `[LimsPlus Lite] Invalid BSON framing (size=${bsonSize} at byte ${offset}) in "${diagnosticLabel}". If this came from gzip, verify .bson.gz; plain mongorestore archives are different from bson directory dumps.`,
+      );
     }
     const slice = buf.subarray(offset, offset + bsonSize);
     docs.push(BSON.deserialize(slice) as Record<string, unknown>);
@@ -300,21 +427,207 @@ function bsonFileToDocuments(filePath: string): Record<string, unknown>[] {
   return docs;
 }
 
-/** Find a directory that directly contains at least one .bson collection file. */
+/**
+ * Map dump path → collection name (`sub/cols.bson` → `sub.cols`; supports gzip).
+ * Matches mongo directory layout nesting under db folder root.
+ */
+function collectionNameFromMongoDumpPath(
+  dumpRootAbs: string,
+  bsonFileAbs: string,
+): string {
+  let rel = path.relative(dumpRootAbs, bsonFileAbs);
+  if (rel.startsWith(`..${path.sep}`)) {
+    throw new Error(
+      `[LimsPlus Lite] Dump path escapes root: dumpRoot="${dumpRootAbs}" file="${bsonFileAbs}"`,
+    );
+  }
+  rel = rel.split(path.sep).join('/');
+  return rel.replace(/\.(bson\.gz|bson)$/i, '').split('/').join('.');
+}
+
+function recursivelyCollectMongoDumpLeafBson(absDirRoot: string): string[] {
+  const out: string[] = [];
+
+  function walk(abs: string): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(abs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const pAbs = path.join(abs, e.name);
+      if (e.isDirectory()) {
+        walk(pAbs);
+      } else if (isMongoLeafBsonDumpFile(e.name)) {
+        out.push(pAbs);
+      }
+    }
+  }
+
+  walk(absDirRoot);
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+function findFirstBsonHierarchyRoot(directoryAbsPath: string): string | null {
+  let bsonRoot = findBsonDumpRoot(directoryAbsPath);
+  if (!bsonRoot) {
+    const children = fs.readdirSync(directoryAbsPath, { withFileTypes: true });
+    for (const c of children) {
+      if (c.isDirectory()) {
+        bsonRoot = findBsonDumpRoot(path.join(directoryAbsPath, c.name));
+        if (bsonRoot) break;
+      }
+    }
+  }
+  return bsonRoot;
+}
+
+function sumMongoDumpLeafArtifactStats(dumpRootAbs: string): {
+  totalStoredBytes: number;
+  newestMtimeMs: number;
+} {
+  const leaves = recursivelyCollectMongoDumpLeafBson(dumpRootAbs);
+  let totalStoredBytes = 0;
+  let newestMtime = Math.trunc(fs.statSync(dumpRootAbs).mtimeMs);
+  for (const p of leaves) {
+    totalStoredBytes += fs.statSync(p).size;
+    newestMtime = Math.max(newestMtime, Math.trunc(fs.statSync(p).mtimeMs));
+  }
+  return { totalStoredBytes, newestMtimeMs: newestMtime };
+}
+
+/** Persists bundled backup identity so replacing limsplus-prod.zip retriggers restore. */
+const LITE_ARTIFACT_MARKER_BASENAME = 'lite-bundled-restore-artifact-marker.json';
+
+export type LiteBundledRestoreArtifactFingerprint = {
+  artifactKind: 'zip' | 'folder';
+  /** Resolved path on disk (`zip` or dump folder containing / wrapping .bson). */
+  artifactResolvedPath: string;
+  artifactMtimeMs: number;
+  artifactSizeBytes: number;
+  lastDatabaseName: string;
+};
+
+function liteArtifactMarkerAbsolutePath(): string {
+  return path.join(app.getPath('userData'), LITE_ARTIFACT_MARKER_BASENAME);
+}
+
+export function readLiteBundledRestoreArtifactFingerprint():
+  | LiteBundledRestoreArtifactFingerprint
+  | null {
+  try {
+    const fp = liteArtifactMarkerAbsolutePath();
+    if (!fs.existsSync(fp)) return null;
+    const raw = fs.readFileSync(fp, 'utf8');
+    const o = JSON.parse(raw) as Partial<LiteBundledRestoreArtifactFingerprint>;
+    if (
+      (o.artifactKind !== 'zip' && o.artifactKind !== 'folder') ||
+      typeof o.artifactResolvedPath !== 'string' ||
+      typeof o.artifactMtimeMs !== 'number' ||
+      typeof o.artifactSizeBytes !== 'number'
+    ) {
+      return null;
+    }
+    return {
+      artifactKind: o.artifactKind,
+      artifactResolvedPath: o.artifactResolvedPath,
+      artifactMtimeMs: o.artifactMtimeMs,
+      artifactSizeBytes: o.artifactSizeBytes,
+      lastDatabaseName:
+        typeof o.lastDatabaseName === 'string' &&
+        o.lastDatabaseName.trim().length > 0
+          ? o.lastDatabaseName.trim()
+          : DEFAULT_LITE_DB_NAME,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeLiteBundledRestoreArtifactFingerprint(
+  m: LiteBundledRestoreArtifactFingerprint,
+): void {
+  try {
+    fs.writeFileSync(
+      liteArtifactMarkerAbsolutePath(),
+      JSON.stringify(m, null, 2),
+      'utf8',
+    );
+  } catch (e: unknown) {
+    console.warn(
+      '[LimsPlus Lite] could not write bundled restore fingerprint marker:',
+      e,
+    );
+  }
+}
+
+function fingerprintZip(zipPathAbs: string): LiteBundledRestoreArtifactFingerprint {
+  const st = fs.statSync(zipPathAbs);
+  return {
+    artifactKind: 'zip',
+    artifactResolvedPath: path.resolve(zipPathAbs),
+    artifactMtimeMs: Math.trunc(st.mtimeMs),
+    artifactSizeBytes: st.size,
+    lastDatabaseName: '',
+  };
+}
+
+function fingerprintFolderDump(
+  folderPathAbs: string,
+): LiteBundledRestoreArtifactFingerprint {
+  const bsonRoot = findFirstBsonHierarchyRoot(folderPathAbs);
+  let totalBson = 0;
+  let maxMtime = Math.trunc(fs.statSync(folderPathAbs).mtimeMs);
+  if (bsonRoot) {
+    const { totalStoredBytes, newestMtimeMs } =
+      sumMongoDumpLeafArtifactStats(bsonRoot);
+    totalBson = totalStoredBytes;
+    maxMtime = Math.max(maxMtime, newestMtimeMs);
+  }
+
+  return {
+    artifactKind: 'folder',
+    artifactResolvedPath: path.resolve(folderPathAbs),
+    artifactMtimeMs: maxMtime,
+    artifactSizeBytes: totalBson,
+    lastDatabaseName: '',
+  };
+}
+
+function bundledArtifactFingerprintsMatch(
+  a: LiteBundledRestoreArtifactFingerprint,
+  b: LiteBundledRestoreArtifactFingerprint,
+): boolean {
+  return (
+    a.artifactKind === b.artifactKind &&
+    path.normalize(path.resolve(a.artifactResolvedPath)) ===
+      path.normalize(path.resolve(b.artifactResolvedPath)) &&
+    a.artifactMtimeMs === b.artifactMtimeMs &&
+    a.artifactSizeBytes === b.artifactSizeBytes
+  );
+}
+
+/** Locate a subdirectory that owns mongorestore bson leaf files (recursive). */
 function findBsonDumpRoot(searchDir: string): string | null {
   const entries = fs.readdirSync(searchDir, { withFileTypes: true });
-  const hasBson = entries.some((e) => e.isFile() && e.name.endsWith('.bson'));
-  if (hasBson) return searchDir;
+  const hasLeafHere = entries.some(
+    (e) => e.isFile() && isMongoLeafBsonDumpFile(e.name),
+  );
+  if (hasLeafHere) return searchDir;
   for (const e of entries) {
-    if (e.isDirectory()) {
-      const nested = findBsonDumpRoot(path.join(searchDir, e.name));
-      if (nested) return nested;
-    }
+    if (!e.isDirectory()) continue;
+    const nested = findBsonDumpRoot(path.join(searchDir, e.name));
+    if (nested) return nested;
   }
   return null;
 }
 
-/** Restore archive or folder dump into mongo (drops target DB first). */
+/**
+ * Mongorestore **directory** format: `collection.bson` or `mongodump --gzip` **`*.bson.gz`** (possibly nested dirs).
+ * Not supported: **`mongorestore --archive=file`** prelude stream (different binary layout).
+ */
 export async function restoreLiteDatabaseDump(
   mongoUri: string,
   dumpFolder: string,
@@ -326,31 +639,64 @@ export async function restoreLiteDatabaseDump(
     const db = client.db(dbName);
     await db.dropDatabase().catch(() => undefined);
 
-    const files = fs.readdirSync(dumpFolder).filter((f) => {
-      const lower = f.toLowerCase();
-      return lower.endsWith('.bson') && !lower.startsWith('.');
-    });
+    const dumpRootResolved = path.resolve(dumpFolder);
+    const bsonPaths = recursivelyCollectMongoDumpLeafBson(dumpRootResolved);
 
-    files.sort();
+    if (bsonPaths.length === 0) {
+      throw new Error(
+        '[LimsPlus Lite] No *.bson or *.bson.gz files under unzip root. Produce a mongodump **directory** (e.g. `mongodump --db limsplus-prod --gzip --out ./dump-dir`) — not a `--archive=` stream — then ZIP that folder as limsplus-prod.zip.',
+      );
+    }
 
-    for (const file of files) {
-      const collName = path.basename(file, '.bson');
+    let documentsInserted = 0;
+    const collectionsWithDocs = new Set<string>();
+
+    for (const fullPath of bsonPaths) {
+      const collName = collectionNameFromMongoDumpPath(
+        dumpRootResolved,
+        fullPath,
+      );
       if (!collName) continue;
-      const full = path.join(dumpFolder, file);
-      let docs = bsonFileToDocuments(full);
 
-      /** Metadata collections are empty in many dumps — skip noop. */
+      let docs: Record<string, unknown>[];
+      try {
+        docs = bsonDocumentsFromBuffer(
+          readMongoLeafBsonFileBuffer(fullPath),
+          fullPath,
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `[LimsPlus Lite] BSON decode failed — ${fullPath}: ${msg}`,
+        );
+      }
+
       if (docs.length === 0) continue;
 
-      /** Optional: prelude / system collections */
+      collectionsWithDocs.add(collName);
+      documentsInserted += docs.length;
       const coll = db.collection(collName);
+      let remaining = docs;
 
-      while (docs.length > 0) {
-        const batch = docs.slice(0, BSON_BATCH);
-        docs = docs.slice(BSON_BATCH);
+      while (remaining.length > 0) {
+        const batch = remaining.slice(0, BSON_BATCH);
+        remaining = remaining.slice(BSON_BATCH);
         await coll.insertMany(batch, { ordered: false });
       }
     }
+
+    if (documentsInserted === 0) {
+      throw new Error(
+        `[LimsPlus Lite] Parsed 0 documents from ${bsonPaths.length} bson file(s) — gzip archive inside zip?, wrong dump layout, or only empty prelude files.`,
+      );
+    }
+
+    console.info('[LimsPlus Lite] mongorestore-directory import:', {
+      databaseName: dbName,
+      bsonLeafFiles: bsonPaths.length,
+      documentsInserted,
+      collectionsPopulation: collectionsWithDocs.size,
+    });
   } finally {
     await client.close().catch(() => undefined);
   }
@@ -362,7 +708,27 @@ function extractZip(zipPath: string, targetDir: string): void {
   zip.extractAllTo(targetDir, true);
 }
 
-/** Prefer ZIP if present; otherwise use extracted dump folder (dev fallback). */
+function dedupeOrderedPaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of paths) {
+    const n = path.normalize(p);
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Path to **`client/database`** when running dev compiled Electron (`build/electron` → two levels up).
+ * Packaged apps use **`process.resourcesPath/database`** instead; see {@link restoreFromBundledDumpIfNeeded}.
+ */
+export function getLiteBundledDatabaseDirectory(): string {
+  return path.join(__dirname, '../../database');
+}
+
+/** Copy ZIP or a loose mongodump folder (`database/dump`, etc.) into `offline-dump-extract`, then find BSON roots. */
 export function resolveDatabaseDumpFolder(options: {
   zipPath?: string | null;
   folderPath?: string | null;
@@ -383,23 +749,16 @@ export function resolveDatabaseDumpFolder(options: {
     fs.cpSync(options.folderPath, unpackRoot, { recursive: true });
   } else {
     throw new Error(
-      'No MongoDB backup found. Expected limsplus-prod.zip or database/limsplus-prod folder.',
+      'No MongoDB backup to extract. Provide database/dump folder, database/limsplus-prod/, or limsplus-prod.zip.',
     );
   }
 
-  let bsonRoot = findBsonDumpRoot(unpackRoot);
-  if (!bsonRoot) {
-    const children = fs.readdirSync(unpackRoot, { withFileTypes: true });
-    for (const c of children) {
-      if (c.isDirectory()) {
-        bsonRoot = findBsonDumpRoot(path.join(unpackRoot, c.name));
-        if (bsonRoot) break;
-      }
-    }
-  }
+  const bsonRoot = findFirstBsonHierarchyRoot(unpackRoot);
 
   if (!bsonRoot) {
-    throw new Error('Backup ZIP did not contain any .bson collection files.');
+    throw new Error(
+      'Mongo dump contains no BSON leaf files (*.bson / *.bson.gz under extract root).',
+    );
   }
   return bsonRoot;
 }
@@ -410,32 +769,179 @@ export function liteDbNameFromDumpPath(dumpFolder: string): string {
   return DEFAULT_LITE_DB_NAME;
 }
 
+/**
+ * Forces a bundled restore even when the **`limsplus-prod`** artifact fingerprint matches disk.
+ *
+ * Prefer updating **`limsplus-prod.zip`** (mtime/size sync) unless you intentionally want one-off refresh.
+ *
+ * **`LIMSPLUS_LITE_IGNORE_BUNDLED_ZIP_CHANGED=1`** — never auto re-import when `limsplus-prod.zip`
+ * bytes/mtime change (stay on embedded Mongo contents even if disk has a fresher ZIP).
+ */
+export function shouldForceLiteBundledDatabaseRestore(): boolean {
+  const v =
+    process.env.LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE?.trim().toLowerCase() ??
+    '';
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+export function shouldIgnoreBundledZipFingerprintChanges(): boolean {
+  const v =
+    process.env.LIMSPLUS_LITE_IGNORE_BUNDLED_ZIP_CHANGED?.trim().toLowerCase() ??
+    '';
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
 export async function restoreFromBundledDumpIfNeeded(
   mongoUri: string,
   isAlreadyRestored: boolean,
 ): Promise<RestoreDumpResult> {
-  if (isAlreadyRestored) {
+  const forceBundledRestore = shouldForceLiteBundledDatabaseRestore();
+  const ignoreBundledFingerprint = shouldIgnoreBundledZipFingerprintChanges();
+
+  const clientDbRoot = getLiteBundledDatabaseDirectory();
+
+  /** Prefer live directory dumps (`database/dump`) over ZIP so edits take effect immediately. */
+  const directoryDumpCandidates = dedupeOrderedPaths([
+    path.join(clientDbRoot, 'dump'),
+    path.join(process.resourcesPath, 'database', 'dump'),
+    path.join(process.cwd(), 'database', 'dump'),
+    path.join(app.getAppPath(), 'database', 'dump'),
+    path.join(clientDbRoot, 'limsplus-prod'),
+    path.join(process.resourcesPath, 'database', 'limsplus-prod'),
+    path.join(process.cwd(), 'database', 'limsplus-prod'),
+    path.join(app.getAppPath(), 'database', 'limsplus-prod'),
+  ]);
+
+  let folderPath: string | undefined;
+  for (const dir of directoryDumpCandidates) {
+    try {
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+        folderPath = dir;
+        break;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const zipCandidates = dedupeOrderedPaths([
+    path.join(process.resourcesPath, 'database', 'limsplus-prod.zip'),
+    path.join(clientDbRoot, 'limsplus-prod.zip'),
+    path.join(process.cwd(), 'database', 'limsplus-prod.zip'),
+    path.join(app.getAppPath(), 'database', 'limsplus-prod.zip'),
+  ]);
+
+  const zipPath = folderPath ? undefined : zipCandidates.find((p) => fs.existsSync(p));
+
+  if (!zipPath && !folderPath) {
+    if (isAlreadyRestored && !forceBundledRestore) {
+      const priorOnly = readLiteBundledRestoreArtifactFingerprint();
+      return {
+        didRestore: false,
+        databaseName:
+          priorOnly?.lastDatabaseName ?? DEFAULT_LITE_DB_NAME,
+      };
+    }
+    throw new Error(
+      [
+        `No MongoDB backup found.`,
+        '',
+        `Preferred: mongorestore --dir dump under`,
+        `  ${path.join(clientDbRoot, 'dump')}`,
+        `(nested *.bson / *.bson.gz files)`,
+        '',
+        `Or: database/limsplus-prod/ or database/limsplus-prod.zip`,
+        '',
+        'Checked directory roots:',
+        ...directoryDumpCandidates.map((p) => `  • ${p}`),
+        '',
+        'Checked ZIP files:',
+        ...zipCandidates.map((p) => `  • ${p}`),
+      ].join('\n'),
+    );
+  }
+
+  const liveFingerprint = zipPath
+    ? fingerprintZip(zipPath)
+    : fingerprintFolderDump(folderPath as string);
+
+  const priorFingerprint = readLiteBundledRestoreArtifactFingerprint();
+
+  let shouldImport = false;
+  if (!isAlreadyRestored || forceBundledRestore) {
+    shouldImport = true;
+  } else if (ignoreBundledFingerprint) {
+    shouldImport = false;
+  } else if (!priorFingerprint) {
+    shouldImport = true;
+  } else {
+    shouldImport = !bundledArtifactFingerprintsMatch(
+      priorFingerprint,
+      liveFingerprint,
+    );
+  }
+
+  if (!shouldImport) {
+    if (!app.isPackaged) {
+      if (priorFingerprint) {
+        console.info(
+          '[LimsPlus Lite] Skipping bundled DB import — dump/ZIP fingerprint unchanged vs marker. Update database/dump contents, replace the ZIP, or set LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE=1.',
+        );
+      } else if (ignoreBundledFingerprint) {
+        console.info(
+          '[LimsPlus Lite] Skipping bundled DB import — LIMSPLUS_LITE_IGNORE_BUNDLED_ZIP_CHANGED is set.',
+        );
+      }
+    }
     return {
       didRestore: false,
-      databaseName: DEFAULT_LITE_DB_NAME,
+      databaseName:
+        priorFingerprint?.lastDatabaseName ?? DEFAULT_LITE_DB_NAME,
     };
   }
 
-  const zipCandidates = [
-    path.join(process.resourcesPath, 'database', 'limsplus-prod.zip'),
-    path.join(app.getAppPath(), 'database', 'limsplus-prod.zip'),
-  ];
-  const zipPath = zipCandidates.find((p) => fs.existsSync(p));
+  if (
+    forceBundledRestore &&
+    (!priorFingerprint ||
+      bundledArtifactFingerprintsMatch(priorFingerprint, liveFingerprint))
+  ) {
+    console.warn(
+      '[LimsPlus Lite] LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE is set — re-importing bundled dump (drops target DB before insert).',
+    );
+  } else if (
+    isAlreadyRestored &&
+    priorFingerprint &&
+    shouldImport &&
+    !forceBundledRestore
+  ) {
+    console.warn(
+      '[LimsPlus Lite] Bundled backup changed — re-importing Mongo snapshot (database/dump, limsplus-prod folder, or ZIP).',
+    );
+  }
 
-  const dirCandidates = [
-    path.join(process.resourcesPath, 'database', 'limsplus-prod'),
-    path.join(app.getAppPath(), 'database', 'limsplus-prod'),
-  ];
-  const folderPath = dirCandidates.find((p) => fs.existsSync(p));
+  if (!app.isPackaged) {
+    console.info('[LimsPlus Lite] Bundled Mongo restore diagnostics:', {
+      resolveZipUsed: zipPath ?? null,
+      resolveFolderUsed: folderPath ?? null,
+      bundledArtifactFingerprint: liveFingerprint,
+      priorArtifactMarkerPresent: Boolean(priorFingerprint),
+      importing: shouldImport,
+    });
+  }
 
-  const dumpFolder = resolveDatabaseDumpFolder({ zipPath, folderPath });
+  const dumpFolder = resolveDatabaseDumpFolder({
+    zipPath: zipPath ?? null,
+    folderPath: folderPath ?? null,
+  });
   const dbName = liteDbNameFromDumpPath(dumpFolder);
 
   await restoreLiteDatabaseDump(mongoUri, dumpFolder, dbName);
+
+  const markerToPersist: LiteBundledRestoreArtifactFingerprint = {
+    ...liveFingerprint,
+    lastDatabaseName: dbName,
+  };
+  writeLiteBundledRestoreArtifactFingerprint(markerToPersist);
+
   return { didRestore: true, databaseName: dbName };
 }

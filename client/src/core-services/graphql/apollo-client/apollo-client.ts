@@ -10,6 +10,7 @@ import { stores } from '../../../stores';
 import { setContext } from '@apollo/client/link/context';
 import { createUploadLink } from 'apollo-upload-client';
 import { IpcRendererEvent } from 'electron';
+import { getLimsLiteApiBase } from '../../../runtime/lims-lite-bootstrap';
 const { ipcRenderer } = window.require('electron');
 
 let apiCount = 0;
@@ -90,12 +91,15 @@ const authMiddleware = new ApolloLink((operation, forward) => {
   return forward(operation);
 });
 
-const graphqlUri =
-  getGraphqlHttpUri(process.env.REACT_APP_ENV || 'Local') ?? '';
+const liteApiBase = getLimsLiteApiBase();
+const graphqlUri = liteApiBase
+  ? `${liteApiBase}/graphql`
+  : getGraphqlHttpUri(process.env.REACT_APP_ENV || 'Local') ?? '';
 
 if (
   process.env.NODE_ENV === 'development' &&
-  (!graphqlUri || graphqlUri.trim() === '')
+  (!graphqlUri || graphqlUri.trim() === '') &&
+  !liteApiBase
 ) {
   console.warn(
     '[Apollo] Missing GraphQL URL — set REACT_APP_API_HOST_LOCAL (e.g. http://localhost:8080/graphql) or REACT_APP_GRAPHQL_HOST_LOCAL in client/.env',
