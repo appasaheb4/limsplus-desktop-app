@@ -5,6 +5,7 @@ import { IpcRendererEvent } from 'electron';
 import './style.css';
 import { useNavigate } from 'react-router-dom';
 import AccountModal from './components/modal-account.component';
+import BackupRestoreModal from './components/backup-restore-modal.component';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -151,7 +152,7 @@ const LIMS_LITE_SETUP_STEPS = [
   {
     title: 'Restore database backup',
     blurb:
-      'Imports client/database backup once; later runs reuse your local data.',
+      'Imports client/database/dump only on first run; later runs read live local MongoDB (your backend changes).',
   },
   {
     title: 'Start NestJS API locally',
@@ -179,6 +180,7 @@ const Home = observer(() => {
   const [activeSection, setActiveSection] =
     useState<DashboardSection>('dashboard');
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null);
+  const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
   const [limsLiteSetup, setLimsLiteSetup] = useState<{
     modalOpen: boolean;
     loading: boolean;
@@ -608,7 +610,13 @@ const Home = observer(() => {
                     </button>
                     <button className='item'>Image Files</button>
                     <button className='item'>HL7 Files</button>
-                    <button className='item'>Backup/Restore</button>
+                    <button
+                      type='button'
+                      className='item'
+                      onClick={() => setBackupRestoreOpen(true)}
+                    >
+                      Backup/Restore
+                    </button>
                     <button className='item'>FTP Locations</button>
                   </div>
                 </div>
@@ -848,6 +856,11 @@ const Home = observer(() => {
           </div>
         </div>
       )}
+
+      <BackupRestoreModal
+        isOpen={backupRestoreOpen}
+        onClose={() => setBackupRestoreOpen(false)}
+      />
 
       <AccountModal
         isOpen={isSidebarOpen}

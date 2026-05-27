@@ -6,6 +6,7 @@ import {
   Menu,
   WebContents,
   session,
+  dialog,
 } from 'electron';
 import * as http from 'http';
 import * as https from 'https';
@@ -28,6 +29,12 @@ import {
   startLiteNestBackend,
   stopLiteNestBackend,
 } from './liteNestBackend';
+import {
+  exportLiteMongoDatabaseToFolder,
+  restoreLiteMongoDatabaseFromFolder,
+  ensureLiteMongoDatabaseForMaintenance,
+  MongoBackupRestoreProgressEvent,
+} from './liteMongoBackupRestore';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
 } from 'electron-devtools-installer';
@@ -830,10 +837,6 @@ ipcMain.handle(
         };
       }
 
-      if (restoreOutcome.didRestore) {
-        store.set('limsOfflineDbRestored', true);
-      }
-
       emitLitePhase(
         wc,
         4,
@@ -911,6 +914,9 @@ ipcMain.handle(
         emitLiteSetupProgress(wc, { phase: 'error', message: msg });
         return { ok: false, error: msg };
       }
+
+      /** After first successful Lite prep, always use persisted embedded Mongo — not client/database/dump on every launch. */
+      store.set('limsOfflineDbRestored', true);
 
       return {
         ok: true,
@@ -1047,6 +1053,121 @@ ipcMain.on('set-title', (event, title) => {
 
 ipcMain.handle('get-user-data-path', () => {
   return app.getPath('userData');
+});
+
+function emitMongoBackupRestoreProgress(
+  wc: WebContents,
+  evt: MongoBackupRestoreProgressEvent,
+): void {
+  if (wc.isDestroyed()) return;
+  try {
+    wc.send('mongo-backup-restore-progress', evt);
+  } catch {
+    /* window closed */
+  }
+}
+
+ipcMain.handle(
+  'select-folder-dialog',
+  async (
+    _event,
+    opts?: { title?: string; buttonLabel?: string },
+  ): Promise<{ ok: boolean; path: string | null }> => {
+    const result = await dialog.showOpenDialog({
+      title: opts?.title ?? 'Select folder',
+      buttonLabel: opts?.buttonLabel ?? 'Select',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths?.[0]) {
+      return { ok: false, path: null };
+    }
+    return { ok: true, path: result.filePaths[0] };
+  },
+);
+
+ipcMain.handle('run-mongo-backup', async (event, destinationRoot: string) => {
+  const wc = event.sender;
+  if (!destinationRoot?.trim()) {
+    return { ok: false, error: 'No destination folder selected.' };
+  }
+  try {
+    const alreadyRestored = !!store.get('limsOfflineDbRestored');
+    const conn = await ensureLiteMongoDatabaseForMaintenance({
+      isAlreadyRestored: alreadyRestored,
+      operation: 'backup',
+      onProgress: (e) => emitMongoBackupRestoreProgress(wc, e),
+    });
+    if (conn.didBundledRestore) {
+      store.set('limsOfflineDbRestored', true);
+    }
+    const result = await exportLiteMongoDatabaseToFolder({
+      mongoUri: conn.mongoUri,
+      databaseName: conn.databaseName,
+      destinationRoot: destinationRoot.trim(),
+      onProgress: (e) => emitMongoBackupRestoreProgress(wc, e),
+    });
+    return {
+      ok: true,
+      outputDir: result.outputDir,
+      dumpRoot: result.dumpRoot,
+      collectionsExported: result.collectionsExported,
+      documentsExported: result.documentsExported,
+      databaseName: conn.databaseName,
+      didBundledRestore: conn.didBundledRestore,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    emitMongoBackupRestoreProgress(wc, {
+      operation: 'backup',
+      phase: 'error',
+      step: 0,
+      totalSteps: 5,
+      label: 'Backup failed',
+      percent: 0,
+      detail: msg,
+    });
+    return { ok: false, error: msg };
+  }
+});
+
+ipcMain.handle('run-mongo-restore', async (event, sourceFolder: string) => {
+  const wc = event.sender;
+  if (!sourceFolder?.trim()) {
+    return { ok: false, error: 'No backup folder selected.' };
+  }
+  try {
+    const alreadyRestored = !!store.get('limsOfflineDbRestored');
+    const conn = await ensureLiteMongoDatabaseForMaintenance({
+      isAlreadyRestored: alreadyRestored,
+      operation: 'restore',
+      onProgress: (e) => emitMongoBackupRestoreProgress(wc, e),
+    });
+    const result = await restoreLiteMongoDatabaseFromFolder({
+      mongoUri: conn.mongoUri,
+      databaseName: conn.databaseName,
+      sourceFolder: sourceFolder.trim(),
+      onProgress: (e) => emitMongoBackupRestoreProgress(wc, e),
+    });
+    store.set('limsOfflineDbRestored', true);
+    return {
+      ok: true,
+      documentsInserted: result.documentsInserted,
+      collectionsRestored: result.collectionsRestored,
+      databaseName: result.databaseName,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    emitMongoBackupRestoreProgress(wc, {
+      operation: 'restore',
+      phase: 'error',
+      step: 0,
+      totalSteps: 5,
+      label: 'Restore failed',
+      percent: 0,
+      detail: msg,
+    });
+    return { ok: false, error: msg };
+  }
 });
 
 ipcMain.handle('start-server', async (event, ip, tcpPort) => {

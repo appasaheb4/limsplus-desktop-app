@@ -100,7 +100,7 @@ function sanitizeMongoDupSlashesAfterAuthority(uri: string): string {
  * limsplus-service resolves Mongo via `getMongodbUrl(process.env.ENV)` → e.g.
  * `MONGODB_URL_LOCAL` when `ENV` is `Local`. Also ensure the default DB name is in the URI for Mongoose.
  */
-function mongoConnectionStringWithDatabase(
+export function mongoConnectionStringWithDatabase(
   mongoUri: string,
   databaseName: string,
 ): string {

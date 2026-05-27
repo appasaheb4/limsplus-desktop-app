@@ -9,7 +9,15 @@ import { resolveExclusiveLoopbackTcpPort } from './exclusiveLoopbackTcpPort';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const AdmZip = require('adm-zip');
 
-const DEFAULT_LITE_DB_NAME = 'limsplus-prod';
+export const DEFAULT_LITE_DB_NAME = 'limsplus-prod';
+
+export type LiteDumpRestoreProgress = {
+  collectionName: string;
+  collectionIndex: number;
+  collectionTotal: number;
+  documentsInCollection: number;
+  documentsInsertedTotal: number;
+};
 const BSON_BATCH = 250;
 
 /** Embedded mongod listens only here (loopback — not exposed on LAN). */
@@ -470,7 +478,7 @@ function recursivelyCollectMongoDumpLeafBson(absDirRoot: string): string[] {
   return out.sort((a, b) => a.localeCompare(b));
 }
 
-function findFirstBsonHierarchyRoot(directoryAbsPath: string): string | null {
+export function findFirstBsonHierarchyRoot(directoryAbsPath: string): string | null {
   let bsonRoot = findBsonDumpRoot(directoryAbsPath);
   if (!bsonRoot) {
     const children = fs.readdirSync(directoryAbsPath, { withFileTypes: true });
@@ -632,7 +640,8 @@ export async function restoreLiteDatabaseDump(
   mongoUri: string,
   dumpFolder: string,
   dbName: string,
-): Promise<void> {
+  onProgress?: (p: LiteDumpRestoreProgress) => void,
+): Promise<{ documentsInserted: number; collectionsRestored: number }> {
   const client = new MongoClient(mongoUri);
   await client.connect();
   try {
@@ -644,14 +653,17 @@ export async function restoreLiteDatabaseDump(
 
     if (bsonPaths.length === 0) {
       throw new Error(
-        '[LimsPlus Lite] No *.bson or *.bson.gz files under unzip root. Produce a mongodump **directory** (e.g. `mongodump --db limsplus-prod --gzip --out ./dump-dir`) — not a `--archive=` stream — then ZIP that folder as limsplus-prod.zip.',
+        'No *.bson or *.bson.gz files found in the selected folder. Use a mongodump-style directory (e.g. limsplus-prod/*.bson), not a single archive stream.',
       );
     }
 
     let documentsInserted = 0;
     const collectionsWithDocs = new Set<string>();
+    const collectionTotal = bsonPaths.length;
+    let collectionIndex = 0;
 
     for (const fullPath of bsonPaths) {
+      collectionIndex += 1;
       const collName = collectionNameFromMongoDumpPath(
         dumpRootResolved,
         fullPath,
@@ -673,6 +685,14 @@ export async function restoreLiteDatabaseDump(
 
       if (docs.length === 0) continue;
 
+      onProgress?.({
+        collectionName: collName,
+        collectionIndex,
+        collectionTotal,
+        documentsInCollection: docs.length,
+        documentsInsertedTotal: documentsInserted,
+      });
+
       collectionsWithDocs.add(collName);
       documentsInserted += docs.length;
       const coll = db.collection(collName);
@@ -687,7 +707,7 @@ export async function restoreLiteDatabaseDump(
 
     if (documentsInserted === 0) {
       throw new Error(
-        `[LimsPlus Lite] Parsed 0 documents from ${bsonPaths.length} bson file(s) — gzip archive inside zip?, wrong dump layout, or only empty prelude files.`,
+        `Parsed 0 documents from ${bsonPaths.length} BSON file(s). Check gzip layout or folder structure.`,
       );
     }
 
@@ -697,6 +717,10 @@ export async function restoreLiteDatabaseDump(
       documentsInserted,
       collectionsPopulation: collectionsWithDocs.size,
     });
+    return {
+      documentsInserted,
+      collectionsRestored: collectionsWithDocs.size,
+    };
   } finally {
     await client.close().catch(() => undefined);
   }
@@ -791,6 +815,18 @@ export function shouldIgnoreBundledZipFingerprintChanges(): boolean {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
+/**
+ * Default: **first run only** seeds from `database/dump`. Later launches use persisted
+ * embedded Mongo (live Nest/backend writes). Opt-in to re-import when dump bytes change:
+ * **`LIMSPLUS_LITE_REIMPORT_WHEN_DUMP_CHANGED=1`**.
+ */
+export function shouldReimportBundledDumpWhenArtifactChanges(): boolean {
+  const v =
+    process.env.LIMSPLUS_LITE_REIMPORT_WHEN_DUMP_CHANGED?.trim().toLowerCase() ??
+    '';
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
 export async function restoreFromBundledDumpIfNeeded(
   mongoUri: string,
   isAlreadyRestored: boolean,
@@ -868,24 +904,32 @@ export async function restoreFromBundledDumpIfNeeded(
   const priorFingerprint = readLiteBundledRestoreArtifactFingerprint();
 
   let shouldImport = false;
-  if (!isAlreadyRestored || forceBundledRestore) {
+  if (forceBundledRestore) {
     shouldImport = true;
-  } else if (ignoreBundledFingerprint) {
-    shouldImport = false;
-  } else if (!priorFingerprint) {
+  } else if (!isAlreadyRestored) {
+    /** First Lite / Connect launch: seed embedded Mongo from bundled dump only. */
+    shouldImport = true;
+  } else if (
+    shouldReimportBundledDumpWhenArtifactChanges() &&
+    !ignoreBundledFingerprint &&
+    priorFingerprint &&
+    !bundledArtifactFingerprintsMatch(priorFingerprint, liveFingerprint)
+  ) {
     shouldImport = true;
   } else {
-    shouldImport = !bundledArtifactFingerprintsMatch(
-      priorFingerprint,
-      liveFingerprint,
-    );
+    /** Already seeded — use live data in userData `lims-lite-mongodb`; do not overwrite from client/database/dump. */
+    shouldImport = false;
   }
 
   if (!shouldImport) {
     if (!app.isPackaged) {
-      if (priorFingerprint) {
+      if (isAlreadyRestored) {
         console.info(
-          '[LimsPlus Lite] Skipping bundled DB import — dump/ZIP fingerprint unchanged vs marker. Update database/dump contents, replace the ZIP, or set LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE=1.',
+          '[LimsPlus Lite] Using persisted local MongoDB — skipping bundled dump import (first-run seed already done). To re-seed from database/dump: LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE=1 or clear limsOfflineDbRestored in user-preferences.json.',
+        );
+      } else if (priorFingerprint) {
+        console.info(
+          '[LimsPlus Lite] Skipping bundled DB import — dump/ZIP fingerprint unchanged vs marker.',
         );
       } else if (ignoreBundledFingerprint) {
         console.info(
