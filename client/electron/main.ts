@@ -35,6 +35,12 @@ import {
   ensureLiteMongoDatabaseForMaintenance,
   MongoBackupRestoreProgressEvent,
 } from './liteMongoBackupRestore';
+import { verifyActivationKeyViaApi } from './licenseActivation';
+import {
+  isLicenseSecurelyActivated,
+  migrateLegacyPlaintextFlag,
+  persistSecureActivationRecord,
+} from './licenseSecureStorage';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
 } from 'electron-devtools-installer';
@@ -1054,6 +1060,31 @@ ipcMain.on('set-title', (event, title) => {
 ipcMain.handle('get-user-data-path', () => {
   return app.getPath('userData');
 });
+
+ipcMain.handle('get-license-activation-status', () => {
+  migrateLegacyPlaintextFlag(!!store.get('licenseActivated'));
+  if (store.get('licenseActivated')) {
+    store.set('licenseActivated', false);
+  }
+  return { activated: isLicenseSecurelyActivated() };
+});
+
+ipcMain.handle(
+  'verify-activation-key',
+  async (_event, activationKey: string) => {
+    const result = await verifyActivationKeyViaApi(
+      typeof activationKey === 'string' ? activationKey : '',
+    );
+    if (result.valid) {
+      persistSecureActivationRecord(
+        typeof activationKey === 'string' ? activationKey : '',
+      );
+      store.set('licenseActivated', false);
+      return { ok: true, message: result.message };
+    }
+    return { ok: false, message: result.message };
+  },
+);
 
 function emitMongoBackupRestoreProgress(
   wc: WebContents,
