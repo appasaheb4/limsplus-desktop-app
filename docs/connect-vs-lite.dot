@@ -1,0 +1,60 @@
+// Connect shell vs LimsPlus Lite window — two UIs in one desktop app
+// Render: dot -Tsvg connect-vs-lite.dot -o rendered/connect-vs-lite.svg
+
+digraph ConnectVsLite {
+  graph [
+    rankdir=TB
+    label="Desktop app: Connect shell vs offline LimsPlus Lite"
+    labelloc=t
+    fontsize=14
+    fontname="Helvetica"
+    bgcolor="#fafafa"
+    pad=0.4
+  ]
+  node [shape=box style="rounded,filled" fontname="Helvetica" fontsize=10]
+  edge [fontname="Helvetica" fontsize=9]
+
+  Electron [label="Electron main process\nmain.ts" fillcolor="#90caf9" penwidth=2]
+
+  subgraph cluster_connect {
+    label="LimsPlus Connect shell (always available)"
+    style=filled
+    color="#e3f2fd"
+
+    MainWin [label="Main BrowserWindow\nReact: home, login, integration-gateway" fillcolor="#bbdefb"]
+    CRA [label="Dev: CRA :3000\nPackaged: build/index.html" fillcolor="#64b5f6"]
+    OnlineAPI [label="Optional online APIs\nREACT_APP_* cloud URLs\n(when network available)" fillcolor="#42a5f5" style=dashed]
+    PyGW [label="Integration Gateway\nPython server binary\nWS :6000 / HTTP :9000\ninstruments TCP/serial" fillcolor="#1e88e5" fontcolor=white]
+  }
+
+  subgraph cluster_lite {
+    label="LimsPlus Lite (offline lab — separate window)"
+    style=filled
+    color="#fff3e0"
+
+    LiteWin [label="Lite BrowserWindow\nsession: persist:limsplus-lite-portal" fillcolor="#ffcc80"]
+    PortalSPA [label="Bundled portal SPA\napp/frontend" fillcolor="#ffb74d"]
+    StaticSrv [label="Loopback static server\nephemeral port" fillcolor="#ffa726"]
+    Nest [label="Nest child process\napp/backend → :8080" fillcolor="#fb8c00"]
+    Mongo [label="Embedded MongoDB\n:27017, limsplus-prod" shape=cylinder fillcolor="#f57c00" fontcolor=white]
+  }
+
+  Electron -> MainWin [label="createWindow"]
+  MainWin -> CRA
+  MainWin -> PyGW [label="IPC start-server\nconnect-ws"]
+  CRA -> OnlineAPI [style=dashed label="login, env fetch\n(if online)"]
+
+  Electron -> LiteWin [label="prepare-and-open-limsplus-lite"]
+  LiteWin -> StaticSrv -> PortalSPA
+  PortalSPA -> Nest [label="limsplusLiteApiBase\nGraphQL + /api"]
+  Nest -> Mongo
+
+  MainWin -> LiteWin [label="button:\nLimsPlus Lite" style=bold color="#e65100"]
+
+  Legend [shape=plaintext label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4">
+      <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10"><B>Connect shell</B> — instrument gateway, dashboard shortcuts, may use cloud when online.</FONT></TD></TR>
+      <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="10"><B>LimsPlus Lite</B> — full LIMS portal + Nest + local Mongo; works without internet (loopback only).</FONT></TD></TR>
+    </TABLE>
+  >]
+}

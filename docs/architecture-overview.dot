@@ -1,0 +1,131 @@
+// LimsPlus Connect — high-level architecture (offline-capable desktop)
+// Render: dot -Tsvg architecture-overview.dot -o rendered/architecture-overview.svg
+
+digraph ArchitectureOverview {
+  graph [
+    rankdir=TB
+    label="LimsPlus Connect — architecture overview\n(client + server + desktop, offline Lite)"
+    labelloc=t
+    fontsize=14
+    fontname="Helvetica"
+    bgcolor="#fafafa"
+    pad=0.4
+    splines=ortho
+    nodesep=0.6
+    ranksep=0.8
+  ]
+  node [shape=box style="rounded,filled" fontname="Helvetica" fontsize=11 margin="0.25,0.12"]
+  edge [fontname="Helvetica" fontsize=9 color="#555555"]
+
+  subgraph cluster_repo {
+    label="Repository (limsplus-desktop-app)"
+    style=filled
+    color="#e8e8e8"
+
+    subgraph cluster_client {
+      label="client/ — Electron desktop app"
+      color="#d4e8f7"
+
+      ElectronMain [label="electron/main.ts\n(IPC, windows, Lite orchestration)" fillcolor="#b3d9ff"]
+      ElectronShell [label="React Connect shell\nsrc/ — Dashboard, Login, Gateway\n(dev: localhost:3000)" fillcolor="#b3d9ff"]
+      ElectronBuild [label="build/electron/*.js\n(compiled TypeScript)" fillcolor="#cce5ff"]
+
+      subgraph cluster_bundled {
+        label="Bundled Lite artifacts (app/)"
+        color="#fff4cc"
+
+        PortalBuild [label="app/frontend/\nPortal SPA (limsplus-portal build)\nindex.html + static/" fillcolor="#ffe699"]
+        NestBackend [label="app/backend/\nNestJS (limsplus-service dist)\nGraphQL + REST" fillcolor="#ffe699"]
+        DatabaseSeed [label="database/dump/\nlimsplus-prod/*.bson\n(first-run seed only)" fillcolor="#ffe699"]
+      }
+
+      subgraph cluster_electron_helpers {
+        label="Electron services"
+        color="#e0e0e0"
+
+        OfflineLimsLite [label="offlineLimsLite.ts\nembedded Mongo, BSON restore" fillcolor="#dddddd"]
+        LiteNest [label="liteNestBackend.ts\nspawn Nest child (ELECTRON_RUN_AS_NODE)" fillcolor="#dddddd"]
+        LiteBackup [label="liteMongoBackupRestore.ts\nbackup / restore UI flow" fillcolor="#dddddd"]
+        PyBinary [label="electron/server/server\n(PyInstaller binary)" fillcolor="#dddddd"]
+      }
+    }
+
+    subgraph cluster_server {
+      label="server/ — Python integration gateway (source)"
+      color="#d5f5d5"
+
+      PySource [label="main.py\naiohttp WS :6000\nHTTP control :9000\nTCP / serial instruments" fillcolor="#a8e6a8"]
+    }
+  }
+
+  subgraph cluster_userdata {
+    label="User profile (app.getPath('userData')) — runtime / offline state"
+    style=dashed
+    color="#888888"
+
+    UserPrefs [label="user-preferences.json\nlimsOfflineDbRestored flag" fillcolor="#f0f0f0"]
+    MongoData [label="lims-lite-mongodb/\npersisted embedded mongod data" fillcolor="#f0f0f0"]
+    OfflineJson [label="lims-lite-offline.json\nmongoUri, apiBaseUrl, ports" fillcolor="#f0f0f0"]
+    Marker [label="lite-bundled-restore-artifact-marker.json" fillcolor="#f0f0f0"]
+  }
+
+  subgraph cluster_packaged {
+    label="Packaged app (electron-builder extraResources)"
+    style=dashed
+    color="#666666"
+
+    ResPortal [label="Resources/portal-build" fillcolor="#eeeeee"]
+    ResBackend [label="Resources/lite-backend" fillcolor="#eeeeee"]
+    ResDatabase [label="Resources/database" fillcolor="#eeeeee"]
+    ResPyServer [label="Resources/server/" fillcolor="#eeeeee"]
+  }
+
+  subgraph cluster_loopback {
+    label="Loopback services at runtime (127.0.0.1)"
+    color="#ffdddd"
+
+    MongoDB [label="MongoDB\nembedded mongod\n:27017 (default)" shape=cylinder fillcolor="#ffcccc"]
+    NestAPI [label="Nest Lite API\n:8080 (default)\n/graphql, /api" fillcolor="#ffcccc"]
+    PortalHTTP [label="Portal static server\nephemeral port\nserve-handler" fillcolor="#ffcccc"]
+    PyWS [label="Python gateway\nWS :6000, HTTP :9000" fillcolor="#ffcccc"]
+  }
+
+  /* Build / compile */
+  ElectronBuild -> ElectronMain
+  PortalBuild -> ResPortal [style=dashed label="package"]
+  NestBackend -> ResBackend [style=dashed]
+  DatabaseSeed -> ResDatabase [style=dashed]
+  PyBinary -> ResPyServer [style=dashed]
+  PySource -> PyBinary [style=dashed label="PyInstaller\nbuild-server.js"]
+
+  /* Main orchestration */
+  ElectronMain -> ElectronShell [label="main window"]
+  ElectronMain -> OfflineLimsLite
+  ElectronMain -> LiteNest
+  ElectronMain -> LiteBackup
+  ElectronMain -> PyBinary [label="spawn on demand"]
+
+  /* Lite runtime */
+  OfflineLimsLite -> MongoDB [label="MMS / mongod"]
+  DatabaseSeed -> OfflineLimsLite [label="first run\nBSON import" style=dashed]
+  MongoData -> MongoDB [label="persist" style=dashed]
+  OfflineLimsLite -> UserPrefs
+  OfflineLimsLite -> Marker
+
+  LiteNest -> NestAPI [label="PORT/HOST env"]
+  NestAPI -> MongoDB [label="Mongoose\nlimsplus-prod"]
+
+  ElectronMain -> PortalHTTP [label="startLimsPortal\nStaticServer"]
+  PortalBuild -> PortalHTTP [label="static files"]
+  PortalHTTP -> NestAPI [label="/graphql proxy\n+ limsplusLiteApiBase"]
+
+  LiteBackup -> MongoDB
+  LiteBackup -> DatabaseSeed [style=dashed label="export layout\ndump/limsplus-prod"]
+
+  ElectronShell -> PyWS [label="Integration\nGateway IPC"]
+  ElectronMain -> OfflineJson [label="write after\nLite prep"]
+
+  /* Packaged paths */
+  ResPortal -> PortalBuild [style=dotted label="dev copy"]
+  ResBackend -> NestBackend [style=dotted]
+}

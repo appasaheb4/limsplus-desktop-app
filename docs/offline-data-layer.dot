@@ -1,0 +1,84 @@
+// Data layer — seed, live DB, API, backup (offline)
+// Render: dot -Tsvg offline-data-layer.dot -o rendered/offline-data-layer.svg
+
+digraph OfflineDataLayer {
+  graph [
+    rankdir=LR
+    label="Offline data layer — MongoDB seed, live records, backup/restore"
+    labelloc=t
+    fontsize=14
+    fontname="Helvetica"
+    bgcolor="#fafafa"
+    pad=0.4
+  ]
+  node [fontname="Helvetica" fontsize=10]
+  edge [fontname="Helvetica" fontsize=9 color="#444444"]
+
+  subgraph cluster_seed {
+    label="First-time seed (read-only template on disk)"
+    style=filled
+    color="#fff8e1"
+
+    DumpDir [label="client/database/dump/\nlimsplus-prod/*.bson\n*.metadata.json" shape=note fillcolor="#ffecb3"]
+    ZipOptional [label="limsplus-prod.zip\n(optional)" shape=note fillcolor="#ffe082"]
+  }
+
+  subgraph cluster_runtime {
+    label="Runtime database (source of truth after first Lite)"
+    style=filled
+    color="#e3f2fd"
+
+    Mongod [label="Embedded mongod\n127.0.0.1:27017" shape=cylinder fillcolor="#90caf9"]
+    DbProd [label="Database: limsplus-prod\ncollections = live records" shape=cylinder fillcolor="#64b5f6"]
+    Mongod -> DbProd [dir=none]
+  }
+
+  subgraph cluster_apps {
+    label="Consumers"
+    style=filled
+    color="#f3e5f5"
+
+    Nest [label="Nest Lite API\nMongoose + GraphQL" fillcolor="#ce93d8"]
+    Portal [label="Portal SPA\nApollo GraphQL\nAxios REST" fillcolor="#ba68c8"]
+    BackupUI [label="Dashboard\nBackup/Restore modal" fillcolor="#ab47bc"]
+  }
+
+  subgraph cluster_userdisk {
+    label="User-chosen external folder"
+    style=dashed
+    color="#666666"
+
+    ExtBackup [label="<folder>/dump/limsplus-prod/\nexported .bson" shape=note fillcolor="#eeeeee"]
+  }
+
+  subgraph cluster_prefs {
+    label="Preferences"
+    color="#eceff1"
+
+    Prefs [label="user-preferences.json\nlimsOfflineDbRestored: true" shape=note fillcolor="#cfd8dc"]
+    Marker [label="lite-bundled-restore-artifact-marker.json\n(fingerprint)" shape=note fillcolor="#b0bec5"]
+  }
+
+  DumpDir -> Mongod [label="restoreLiteDatabaseDump\nONCE (first run)" color="#f57c00" penwidth=2]
+  ZipOptional -> DumpDir [style=dashed]
+
+  DbProd -> Nest [label="read/write"]
+  Nest -> Portal [label="HTTP\n127.0.0.1:8080"]
+  Portal -> Nest [label="mutations/queries"]
+
+  DbProd -> BackupUI [label="export BSON"]
+  BackupUI -> ExtBackup [label="backup"]
+  ExtBackup -> DbProd [label="restore\n(user folder)" color="#1976d2" style=dashed]
+
+  Prefs -> Mongod [style=dotted label="skip re-import"]
+  Marker -> DumpDir [style=dotted label="optional re-import\nLIMSPLUS_LITE_REIMPORT_WHEN_DUMP_CHANGED"]
+
+  note1 [shape=plaintext label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <TR><TD COLSPAN="2"><B>Important</B></TD></TR>
+      <TR><TD ALIGN="LEFT">After first run</TD><TD ALIGN="LEFT">Backend edits stay in lims-lite-mongodb</TD></TR>
+      <TR><TD ALIGN="LEFT">Not refreshed from</TD><TD ALIGN="LEFT">client/database/dump on each launch</TD></TR>
+      <TR><TD ALIGN="LEFT">Re-seed manually</TD><TD ALIGN="LEFT">LIMSPLUS_LITE_FORCE_BUNDLED_RESTORE=1</TD></TR>
+    </TABLE>
+  >]
+}

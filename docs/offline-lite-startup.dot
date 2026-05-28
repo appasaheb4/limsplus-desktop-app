@@ -1,0 +1,46 @@
+// LimsPlus Lite — startup flow (Dashboard → LimsPlus Lite button)
+// Render: dot -Tsvg offline-lite-startup.dot -o rendered/offline-lite-startup.svg
+
+digraph OfflineLiteStartup {
+  graph [
+    rankdir=TB
+    label="Offline mode: LimsPlus Lite startup sequence"
+    labelloc=t
+    fontsize=14
+    fontname="Helvetica"
+    bgcolor="#fafafa"
+    pad=0.4
+  ]
+  node [shape=box style="rounded,filled" fontname="Helvetica" fontsize=10]
+  edge [fontname="Helvetica" fontsize=9]
+
+  User [label="User\n(Dashboard)" shape=ellipse fillcolor="#e1f5fe"]
+  Home [label="home.screen.tsx\nopenOfflineLimsPlusLite()" fillcolor="#b3e5fc"]
+  IPC [label="IPC: prepare-and-open-limsplus-lite\nmain.ts handler" fillcolor="#81d4fa"]
+  CheckArtifacts [label="1. Verify\napp/frontend/index.html\napp/backend/main.js" fillcolor="#fff9c4"]
+  StartMongo [label="2. ensureLiteMongoRunning()\n127.0.0.1 :27017 (default)\nuserData/lims-lite-mongodb" fillcolor="#fff59d"]
+  PingMongo [label="3. waitUntilLiteMongoAcceptsConnections()\nping admin" fillcolor="#fff59d"]
+  RestoreDecision [label="4. restoreFromBundledDumpIfNeeded()\nread limsOfflineDbRestored" shape=diamond fillcolor="#ffe082"]
+  FirstRunImport [label="First run:\nimport client/database/dump\n→ limsplus-prod DB\n(drop + BSON insert)" fillcolor="#ffcc80"]
+  SkipImport [label="Later runs:\nuse persisted Mongo only\n(skip database/dump)" fillcolor="#c8e6c9"]
+  StartNest [label="5. startLiteNestBackend()\nELECTRON_RUN_AS_NODE\n127.0.0.1 :8080" fillcolor="#ffab91"]
+  WriteJson [label="6. Write lims-lite-offline.json\nmongoUri, apiBaseUrl, ports" fillcolor="#e1bee7"]
+  StaticServer [label="7. startLimsPortalStaticServer()\nserve-handler, port 0\n/graphql → Nest proxy" fillcolor="#ce93d8"]
+  LiteWindow [label="8. Lite BrowserWindow\n?limsplusLiteApiBase=\nlims-lite-bootstrap → Apollo/REST" fillcolor="#b39ddb"]
+  SetFlag [label="9. store.set(limsOfflineDbRestored, true)" fillcolor="#d1c4e9"]
+
+  User -> Home -> IPC -> CheckArtifacts -> StartMongo -> PingMongo -> RestoreDecision
+  RestoreDecision -> FirstRunImport [label="limsOfflineDbRestored\n== false"]
+  RestoreDecision -> SkipImport [label="already restored"]
+  FirstRunImport -> StartNest
+  SkipImport -> StartNest
+  StartNest -> WriteJson -> StaticServer -> LiteWindow -> SetFlag
+
+  subgraph cluster_external {
+    label="Optional: external Mongo (skip embedded)"
+    style=dashed
+    color="#888888"
+    ExtEnv [label="LIMSPLUS_LITE_EXTERNAL_MONGO_URI\nexisting mongod / Atlas" fillcolor="#eeeeee"]
+  }
+  ExtEnv -> StartMongo [style=dashed label="bypass MMS"]
+}
