@@ -29,9 +29,7 @@ function rejectReadably(prefix: string, error: unknown): Promise<never> {
   if (error instanceof Error) return Promise.reject(error);
   return Promise.reject(
     new Error(
-      typeof error === 'string'
-        ? error
-        : `${prefix}: ${JSON.stringify(error)}`,
+      typeof error === 'string' ? error : `${prefix}: ${JSON.stringify(error)}`,
     ),
   );
 }
@@ -67,6 +65,8 @@ export class Service {
         config.headers = {
           ...config.headers,
         };
+        console.log({ config });
+
         return config;
       },
       (error) => {

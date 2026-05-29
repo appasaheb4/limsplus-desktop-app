@@ -342,6 +342,13 @@ let isLiteMongoQuitHandling = false;
 const isDev = !app.isPackaged;
 process.env.NODE_ENV = 'production';
 
+/** Connector React dev server (CRA), default port 3000. Override with `LIMSPLUS_CONNECT_DEV_URL`. */
+function getConnectorDevUrl(): string {
+  const raw = process.env.LIMSPLUS_CONNECT_DEV_URL?.trim();
+  if (raw) return raw.replace(/\/$/, '');
+  return 'http://127.0.0.1:3000';
+}
+
 const store = new Store({
   configName: 'user-preferences',
   defaults: {
@@ -368,6 +375,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
     height: 768,
+    title: 'LimsPlus Connect',
     resizable: false,
     icon: path.join(__dirname, '../assets/icon.ico'),
     skipTaskbar: true,
@@ -391,7 +399,9 @@ function createWindow() {
     if (shouldAutoOpenElectronDevTools()) {
       mainWindow.webContents.openDevTools();
     }
-    mainWindow.loadURL('http://localhost:3000');
+    const connectorUrl = getConnectorDevUrl();
+    console.info('[LimsPlus Connect] loading connector UI:', connectorUrl);
+    mainWindow.loadURL(connectorUrl);
   } else {
     mainWindow.loadFile(path.join(__dirname, '../index.html'));
   }
@@ -441,6 +451,7 @@ function warnIfPortalUsesExternalAssets(indexHtmlPath: string): void {
  */
 function shouldAutoOpenElectronDevTools(): boolean {
   const v = (process.env.LIMSPLUS_OPEN_DEVTOOLS ?? '').toLowerCase();
+  if (v === '0' || v === 'false') return false;
   return v === '1' || v === 'true';
 }
 
@@ -488,7 +499,7 @@ ipcMain.on('navigate-to-integration-gateway', (event, route) => {
     if (shouldAutoOpenElectronDevTools()) {
       childWindows.webContents.openDevTools();
     }
-    childWindows.loadURL(`http://localhost:3000/#${route}`);
+    childWindows.loadURL(`${getConnectorDevUrl()}#${route}`);
   } else {
     childWindows.loadFile(path.join(__dirname, '../index.html'), {
       hash: route,
@@ -730,6 +741,12 @@ ipcMain.handle(
   'prepare-and-open-limsplus-lite',
   async (event): Promise<PrepareLimsLiteResult> => {
     const wc = event.sender;
+    if (!isLicenseSecurelyActivated()) {
+      const msg =
+        'Activate LimsPlus Connect with your license key before opening LimsPlus Lite.';
+      emitLiteSetupProgress(wc, { phase: 'error', message: msg });
+      return { ok: false, error: msg };
+    }
     try {
       emitLitePhase(
         wc,
@@ -1066,7 +1083,20 @@ ipcMain.handle('get-license-activation-status', () => {
   if (store.get('licenseActivated')) {
     store.set('licenseActivated', false);
   }
-  return { activated: isLicenseSecurelyActivated() };
+  const forceGate =
+    !app.isPackaged &&
+    (process.env.LIMSPLUS_FORCE_ACTIVATION_GATE === '1' ||
+      process.env.LIMSPLUS_FORCE_ACTIVATION_GATE === 'true');
+  if (forceGate) {
+    return { activated: false, forced: true };
+  }
+  const activated = isLicenseSecurelyActivated();
+  if (!app.isPackaged && activated) {
+    console.log(
+      '[LimsPlus] Activation gate skipped — license already stored. Run `yarn reset-activation` then restart, or set LIMSPLUS_FORCE_ACTIVATION_GATE=1.',
+    );
+  }
+  return { activated };
 });
 
 ipcMain.handle(
@@ -1083,6 +1113,20 @@ ipcMain.handle(
       return { ok: true, message: result.message };
     }
     return { ok: false, message: result.message };
+  },
+);
+
+/** Called after REST verifies the key — stores activation proof locally (no plaintext key). */
+ipcMain.handle(
+  'persist-license-activation',
+  (_event, activationKey: string) => {
+    const key = typeof activationKey === 'string' ? activationKey.trim() : '';
+    if (!key.length) {
+      return { ok: false, message: 'Please enter your activation key.' };
+    }
+    persistSecureActivationRecord(key);
+    store.set('licenseActivated', false);
+    return { ok: true };
   },
 );
 

@@ -1,5 +1,9 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import Login from './modules/login/login.screen';
+import {
+  HashRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
 import Home from './modules/home/home.screen';
 import IntegrationGateway from './modules/integration-gateway/integrationGateway.screen';
 import ActivationKeyGate from './modules/license-activation/activation-key-gate.component';
@@ -9,7 +13,6 @@ import { useEffect, useState } from 'react';
 
 const { ipcRenderer } = window.require('electron');
 
-/** Temporarily skip login — remove or route via `/login` when auth is wired back. */
 function DashboardWithWelcome() {
   return (
     <div className='flex min-h-screen w-full flex-col'>
@@ -62,13 +65,14 @@ function App() {
       {licenseReady === 'activated' && (
         <Router>
           <Routes>
-            <Route path='/' element={<DashboardWithWelcome />} />
+            <Route path='/' element={<Navigate to='/dashboard' replace />} />
+            <Route path='/login' element={<Navigate to='/dashboard' replace />} />
             <Route path='/dashboard' element={<DashboardWithWelcome />} />
-            <Route path='/login' element={<Login />} />
             <Route
               path='/integration-gateway'
               element={<IntegrationGateway />}
             />
+            <Route path='*' element={<Navigate to='/dashboard' replace />} />
           </Routes>
         </Router>
       )}

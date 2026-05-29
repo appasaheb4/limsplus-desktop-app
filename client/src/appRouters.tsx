@@ -1,6 +1,5 @@
-// Add import statements for your App, LandingPage, Home, Products & Product page
+// Legacy route table — runtime entry uses App.tsx (activation gate → dashboard).
 import App from './App';
-import Login from './modules/login/login.screen';
 import Home from './modules/home/home.screen';
 import IntegrationGateway from './modules/integration-gateway/integrationGateway.screen';
 
@@ -11,11 +10,7 @@ const routes = [
     children: [
       {
         index: true,
-        element: <Login />,
-      },
-      {
-        path: '/login',
-        element: <Login />,
+        element: <Home />,
       },
       {
         path: '/dashboard',
@@ -26,10 +21,6 @@ const routes = [
         element: <IntegrationGateway />,
       },
     ],
-  },
-  {
-    path: '/login',
-    element: <Login />,
   },
 ];
 export default routes;

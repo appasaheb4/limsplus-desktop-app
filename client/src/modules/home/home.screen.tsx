@@ -255,7 +255,7 @@ const Home = observer(() => {
 
     if (fileExists) {
       await ipcRenderer.invoke('remove-file', filePath);
-      navigate('/');
+      navigate('/dashboard');
     } else {
       alert('Something Went Wrong..');
     }
