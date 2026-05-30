@@ -35,8 +35,10 @@ import {
   ensureLiteMongoDatabaseForMaintenance,
   MongoBackupRestoreProgressEvent,
 } from './liteMongoBackupRestore';
+import { getDesktopActivationSystemInfo } from './desktopActivationSystemInfo';
 import { verifyActivationKeyViaApi } from './licenseActivation';
 import {
+  clearSecureActivationRecord,
   isLicenseSecurelyActivated,
   migrateLegacyPlaintextFlag,
   persistSecureActivationRecord,
@@ -57,13 +59,6 @@ const fs = require('fs');
 const FormData = require('form-data');
 const { default: axios } = require('axios');
 
-/** Same core as `serve -s <dir>` (SPA fallback + static files); avoids `file://` breaking `/static/...`. */
-const serveHandler = require('serve-handler') as (
-  request: http.IncomingMessage,
-  response: http.ServerResponse,
-  config?: Record<string, unknown>,
-) => Promise<void>;
-
 let mainWindow: any;
 // let childWindows = [];
 let childWindows: any;
@@ -71,8 +66,25 @@ let childWindows: any;
 let limsPlusLiteWindow: BrowserWindow | null = null;
 /** Loopback HTTP server (`serve-handler`, like `serve -s app/frontend`). */
 let limsPortalStaticServer: http.Server | null = null;
+
+/** In-memory runtime for Lite portal (survives `app/frontend` copy/replace). */
+let limsPortalRuntimeConfig: {
+  localLoginCompany: string;
+  apiBaseUrl: string;
+} = { localLoginCompany: '', apiBaseUrl: '' };
+
 /** Isolated Lite session — avoids stale CRA service worker cache from the shell. */
 const LIMSPLUS_LITE_SESSION_PARTITION = 'persist:limsplus-lite-portal';
+
+const LIMS_PORTAL_BOOTSTRAP_URL_PATH = '/lims-portal-desktop-bootstrap.js';
+const LIMS_PORTAL_RUNTIME_CONFIG_PATH = '/lims-desktop-runtime-config.json';
+/** All CRA chunks under `static/js` (Login uses 9701.*.js, not only `main.*.js`). */
+const PORTAL_STATIC_JS_PATH_RE = /^\/static\/js\/[^/]+\.js$/;
+
+/** Baked at portal build — Login does `.split(" ")[0]` → always GENEFLOW. */
+const PORTAL_BAKED_MULTI_COMPANY_LITERAL =
+  'GENEFLOW GENEFLOW ACCUSTIX DEMO CONFIG TEST';
+const LIMS_PORTAL_BOOTSTRAP_SCRIPT_TAG = `<script src="${LIMS_PORTAL_BOOTSTRAP_URL_PATH}"></script>`;
 
 function stopLimsPortalStaticServer(): void {
   if (limsPortalStaticServer) {
@@ -81,17 +93,141 @@ function stopLimsPortalStaticServer(): void {
   }
 }
 
-/** Passes spawned Nest loopback URL into CRA via query; bootstrap captures it → sessionStorage. */
+/** Passes spawned Nest loopback URL + company code into portal via query (bootstrap → sessionStorage). */
 function appendPortalLiteApiBaseQuery(
   portalUrl: string,
   liteApiBaseUrl: string,
+  localLoginCompany?: string,
 ): string {
   const trimmed = liteApiBaseUrl.replace(/\/$/, '');
   const u = new URL(portalUrl);
   u.searchParams.delete('limsplusLiteApiBase');
   u.searchParams.delete('liteApiBase');
   u.searchParams.set('limsplusLiteApiBase', trimmed);
+  const company = localLoginCompany?.trim();
+  if (company) {
+    u.searchParams.set('localLoginCompany', company);
+    u.searchParams.set('REACT_APP_LOCAL_LOGIN_COMPANY', company);
+  }
   return u.toString();
+}
+
+function getLocalLoginCompanyCodeFromStore(): string {
+  const direct = store.get('localLoginCompany');
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const profile = store.get('activationProfile') as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  if (profile && typeof profile === 'object') {
+    const code = profile.code ?? profile.companyCode;
+    if (typeof code === 'string' && code.trim()) return code.trim();
+    if (typeof code === 'number' && Number.isFinite(code)) return String(code);
+  }
+  return '';
+}
+
+/** Stable Electron asset (not under replaceable `app/frontend`). */
+function resolveElectronAssetPath(fileName: string): string {
+  const candidates = [
+    path.join(__dirname, fileName),
+    path.join(__dirname, '..', '..', 'electron', fileName),
+    path.join(app.getAppPath(), 'electron', fileName),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.join(__dirname, '..', '..', 'electron', fileName);
+}
+
+function escapeForJsDoubleQuotedString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/** Portal CRA inlines env + Login chunk hardcodes multi-company string — patch at serve time. */
+function patchPortalJsSource(source: string): string {
+  const company = limsPortalRuntimeConfig.localLoginCompany.trim();
+  const apiBase = limsPortalRuntimeConfig.apiBaseUrl.trim();
+  let out = source;
+  if (company) {
+    const escaped = escapeForJsDoubleQuotedString(company);
+    const baked = escapeForJsDoubleQuotedString(
+      PORTAL_BAKED_MULTI_COMPANY_LITERAL,
+    );
+    out = out.replace(
+      /REACT_APP_LOCAL_LOGIN_COMPANY:"[^"]*"/g,
+      `REACT_APP_LOCAL_LOGIN_COMPANY:"${escaped}"`,
+    );
+    if (out.includes(PORTAL_BAKED_MULTI_COMPANY_LITERAL)) {
+      out = out.split(PORTAL_BAKED_MULTI_COMPANY_LITERAL).join(company);
+    }
+    /** Login chunk: `v("GENEFLOW …".split(" ")[0]||"GENEFLOW")` — first token is always GENEFLOW. */
+    const splitFirstGeneflow = new RegExp(
+      `"${baked}"\\.split\\(" "\\)\\[0\\]\\|\\|"GENEFLOW"`,
+      'g',
+    );
+    const runtimeCompanyExpr = `(function(){try{var c=sessionStorage.getItem("REACT_APP_LOCAL_LOGIN_COMPANY");return c&&c.trim()?c.trim():"${escaped}";}catch(e){return"${escaped}";}})()`;
+    out = out.replace(splitFirstGeneflow, runtimeCompanyExpr);
+  }
+  if (apiBase) {
+    const graphql = `${apiBase.replace(/\/$/, '')}/graphql`;
+    const escapedApi = escapeForJsDoubleQuotedString(graphql);
+    out = out.replace(
+      /REACT_APP_API_HOST_LOCAL:"[^"]*"/g,
+      `REACT_APP_API_HOST_LOCAL:"${escapedApi}"`,
+    );
+  }
+  return out;
+}
+
+function injectPortalBootstrapIntoHtml(html: string): string {
+  if (html.includes(LIMS_PORTAL_BOOTSTRAP_URL_PATH)) return html;
+  const marker = /<script\s/i;
+  if (marker.test(html)) {
+    return html.replace(marker, `${LIMS_PORTAL_BOOTSTRAP_SCRIPT_TAG}$&`);
+  }
+  return html.replace(
+    /<\/head>/i,
+    `${LIMS_PORTAL_BOOTSTRAP_SCRIPT_TAG}</head>`,
+  );
+}
+
+function servePortalFile(
+  filePath: string,
+  res: http.ServerResponse,
+  reqPath: string,
+): void {
+  const ext = path.extname(filePath).toLowerCase();
+  const types: Record<string, string> = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.ico': 'image/x-icon',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml',
+  };
+  res.setHeader('Content-Type', types[ext] ?? 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (PORTAL_STATIC_JS_PATH_RE.test(reqPath)) {
+    const company = limsPortalRuntimeConfig.localLoginCompany.trim();
+    const apiBase = limsPortalRuntimeConfig.apiBaseUrl.trim();
+    if (company || apiBase) {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const patched = patchPortalJsSource(raw);
+      res.end(patched);
+      return;
+    }
+  }
+
+  if (ext === '.html') {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    res.end(injectPortalBootstrapIntoHtml(raw));
+    return;
+  }
+
+  fs.createReadStream(filePath).pipe(res);
 }
 
 const HOP_BY_HOP_REQUEST_HEADERS = new Set([
@@ -199,7 +335,9 @@ function proxyNestGraphql(
   const rawReq = req.url || '/';
   const qStart = rawReq.indexOf('?');
   const query = qStart === -1 ? '' : rawReq.slice(qStart);
-  let upstreamPath = stripTrailingSlashExceptRoot(httpPathOnly(targetUrl.pathname));
+  let upstreamPath = stripTrailingSlashExceptRoot(
+    httpPathOnly(targetUrl.pathname),
+  );
   if (upstreamPath === '') {
     upstreamPath = '/graphql';
   }
@@ -227,7 +365,10 @@ function proxyNestGraphql(
       return;
     }
     try {
-      res.writeHead(pres.statusCode, sanitizeProxyResponseHeaders(pres.headers));
+      res.writeHead(
+        pres.statusCode,
+        sanitizeProxyResponseHeaders(pres.headers),
+      );
     } catch {
       if (!res.headersSent) {
         res.statusCode = 502;
@@ -236,7 +377,10 @@ function proxyNestGraphql(
       return;
     }
     pres.on('error', (e: unknown) => {
-      console.error('[LimsPlus Lite GraphQL proxy] upstream response stream', e);
+      console.error(
+        '[LimsPlus Lite GraphQL proxy] upstream response stream',
+        e,
+      );
       if (!res.headersSent) {
         res.destroy();
       } else {
@@ -281,6 +425,11 @@ function startLimsPortalStaticServer(
       ? liteGraphqlPathFromUpstream(nestGraphqlAbsolute)
       : '';
 
+    const bootstrapPath = resolveElectronAssetPath(
+      'limsPortalDesktopBootstrap.js',
+    );
+    const indexPath = path.join(buildRootNorm, 'index.html');
+
     const server = http.createServer((req, res) => {
       if (!app.isPackaged) {
         res.once('finish', () => {
@@ -293,6 +442,38 @@ function startLimsPortalStaticServer(
         });
       }
 
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.statusCode = 405;
+        res.end();
+        return;
+      }
+
+      const reqPath = httpPathOnly(req.url);
+
+      if (reqPath === LIMS_PORTAL_RUNTIME_CONFIG_PATH) {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(
+          JSON.stringify({
+            localLoginCompany: limsPortalRuntimeConfig.localLoginCompany,
+            apiBaseUrl: limsPortalRuntimeConfig.apiBaseUrl,
+          }),
+        );
+        return;
+      }
+
+      if (reqPath === LIMS_PORTAL_BOOTSTRAP_URL_PATH) {
+        if (!fs.existsSync(bootstrapPath)) {
+          res.statusCode = 404;
+          res.end('limsPortalDesktopBootstrap.js not found');
+          return;
+        }
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        fs.createReadStream(bootstrapPath).pipe(res);
+        return;
+      }
+
       if (
         nestGraphqlAbsolute &&
         requestTargetsLiteGraphql(req.url, liteGraphqlPath)
@@ -301,19 +482,36 @@ function startLimsPortalStaticServer(
         return;
       }
 
-      void serveHandler(req, res, {
-        public: buildRootNorm,
-        directoryListing: false,
-        cleanUrls: false,
-        /** Same idea as `serve -s`: client routes fall back to `index.html`. */
-        rewrites: [{ source: '**', destination: '/index.html' }],
-      }).catch((err: unknown) => {
-        console.error('[LimsPlus Lite] serve-handler', err);
-        if (!res.headersSent) {
-          res.statusCode = 500;
-          res.end('Internal Server Error');
+      const relative = reqPath.replace(/^\//, '') || 'index.html';
+      const candidate = path.join(buildRootNorm, relative);
+      const normalized = path.normalize(candidate);
+      if (
+        normalized.startsWith(buildRootNorm) &&
+        fs.existsSync(normalized) &&
+        fs.statSync(normalized).isFile()
+      ) {
+        if (req.method === 'HEAD') {
+          res.statusCode = 200;
+          res.end();
+          return;
         }
-      });
+        servePortalFile(normalized, res, reqPath);
+        return;
+      }
+
+      if (req.method === 'HEAD') {
+        res.statusCode = 200;
+        res.end();
+        return;
+      }
+
+      if (fs.existsSync(indexPath)) {
+        servePortalFile(indexPath, res, '/index.html');
+        return;
+      }
+
+      res.statusCode = 404;
+      res.end('Not found');
     });
 
     limsPortalStaticServer = server;
@@ -357,6 +555,9 @@ const store = new Store({
     companyList: [],
     /** One-time BSON restore into embedded Mongo for offline LimsPlus Lite. */
     limsOfflineDbRestored: false,
+    activationProfile: null as Record<string, unknown> | null,
+    /** From activation `company.code` — used for Lite portal login. */
+    localLoginCompany: '',
   },
 });
 
@@ -424,8 +625,7 @@ function warnIfPortalUsesExternalAssets(indexHtmlPath: string): void {
   if (app.isPackaged) return;
   try {
     const html = fs.readFileSync(indexHtmlPath, 'utf8');
-    const tagRe =
-      /<(?:script|link)[^>]*\s(?:src|href)=["']([^"']+)["']/gi;
+    const tagRe = /<(?:script|link)[^>]*\s(?:src|href)=["']([^"']+)["']/gi;
     const remote: string[] = [];
     let m: RegExpExecArray | null;
     for (;;) {
@@ -573,7 +773,12 @@ type PrepareLimsLiteResult =
       databaseName: string;
       firstRunRestore: boolean;
     }
-  | { ok: false; error: string; portalIndexPath?: string; backendEntryPath?: string };
+  | {
+      ok: false;
+      error: string;
+      portalIndexPath?: string;
+      backendEntryPath?: string;
+    };
 
 /** Progress for the LimsPlus Lite setup modal in the renderer. */
 type LimsLiteSetupProgressEvent =
@@ -603,10 +808,29 @@ function emitLitePhase(wc: WebContents, step: number, hint?: string) {
   });
 }
 
+function injectPortalLocalLoginCompany(
+  wc: WebContents,
+  companyCode: string,
+): void {
+  const company = companyCode.trim();
+  if (!company || wc.isDestroyed()) return;
+  const escaped = JSON.stringify(company);
+  const script = `(function(){var c=${escaped};try{sessionStorage.setItem('REACT_APP_LOCAL_LOGIN_COMPANY',c);}catch(e){}window.__LIMSPLUS_REACT_APP_LOCAL_LOGIN_COMPANY__=c;window.process=window.process||{env:{}};window.process.env=window.process.env||{};window.process.env.REACT_APP_LOCAL_LOGIN_COMPANY=c;})();`;
+  wc.executeJavaScript(script, true).catch((err: unknown) => {
+    console.warn('[LimsPlus Lite] inject company code failed:', err);
+  });
+}
+
 async function ensureLocalLimsPlusLiteWindowOpen(
   portalServeUrl: string,
+  localLoginCompany?: string,
 ): Promise<void> {
+  const company =
+    localLoginCompany?.trim() || getLocalLoginCompanyCodeFromStore();
+
   if (limsPlusLiteWindow && !limsPlusLiteWindow.isDestroyed()) {
+    await limsPlusLiteWindow.loadURL(portalServeUrl);
+    injectPortalLocalLoginCompany(limsPlusLiteWindow.webContents, company);
     limsPlusLiteWindow.focus();
     limsPlusLiteWindow.show();
     return;
@@ -690,6 +914,7 @@ async function ensureLocalLimsPlusLiteWindowOpen(
 
   limsPlusLiteWindow.once('ready-to-show', revealLiteWindow);
   wc.once('did-finish-load', () => {
+    injectPortalLocalLoginCompany(wc, company);
     revealLiteWindow();
     if (
       isDev &&
@@ -700,8 +925,7 @@ async function ensureLocalLimsPlusLiteWindowOpen(
         process.env.LIMSPLUS_LITE_DEVTOOLS_DELAY_MS ?? '900',
         10,
       );
-      const delay =
-        Number.isFinite(raw) && raw >= 0 ? raw : 900;
+      const delay = Number.isFinite(raw) && raw >= 0 ? raw : 900;
       setTimeout(() => {
         try {
           if (!wc.isDestroyed()) wc.openDevTools({ mode: 'detach' });
@@ -737,10 +961,27 @@ async function ensureLocalLimsPlusLiteWindowOpen(
   });
 }
 
+type PrepareLimsLitePayload = { localLoginCompany?: string };
+
+function resolveLocalLoginCompanyForLite(
+  payload?: PrepareLimsLitePayload,
+): string {
+  const fromRenderer = payload?.localLoginCompany?.trim();
+  if (fromRenderer) {
+    store.set('localLoginCompany', fromRenderer);
+    return fromRenderer;
+  }
+  return getLocalLoginCompanyCodeFromStore();
+}
+
 ipcMain.handle(
   'prepare-and-open-limsplus-lite',
-  async (event): Promise<PrepareLimsLiteResult> => {
+  async (
+    event,
+    payload?: PrepareLimsLitePayload,
+  ): Promise<PrepareLimsLiteResult> => {
     const wc = event.sender;
+    const companyCodeForLite = resolveLocalLoginCompanyForLite(payload);
     if (!isLicenseSecurelyActivated()) {
       const msg =
         'Activate LimsPlus Connect with your license key before opening LimsPlus Lite.';
@@ -902,12 +1143,18 @@ ipcMain.handle(
             liteMongoPort: liteMongoTcpPortForJson,
             apiBaseUrl: liteApiBaseUrl,
             liteApiPort,
+            localLoginCompany: companyCodeForLite,
             networkScope: 'loopback-only-not-exposed-outside-this-machine',
           },
           null,
           2,
         ),
       );
+
+      limsPortalRuntimeConfig = {
+        localLoginCompany: companyCodeForLite,
+        apiBaseUrl: liteApiBaseUrl,
+      };
 
       const portalRoot = path.dirname(indexPath);
       try {
@@ -919,16 +1166,14 @@ ipcMain.handle(
         const portalUrl = appendPortalLiteApiBaseQuery(
           `${baseUrl}/`,
           liteApiBaseUrl,
+          companyCodeForLite,
         );
         emitLitePhase(
           wc,
           6,
           `Frontend static server ready — opening ${portalUrl}`,
         );
-        if (!app.isPackaged) {
-          console.info('[LimsPlus Lite] Frontend URL:', portalUrl);
-        }
-        await ensureLocalLimsPlusLiteWindowOpen(portalUrl);
+        await ensureLocalLimsPlusLiteWindowOpen(portalUrl, companyCodeForLite);
       } catch (serveErr: unknown) {
         stopLiteNestBackend();
         const detail =
@@ -1078,6 +1323,10 @@ ipcMain.handle('get-user-data-path', () => {
   return app.getPath('userData');
 });
 
+ipcMain.handle('get-desktop-activation-system-info', () => {
+  return getDesktopActivationSystemInfo();
+});
+
 ipcMain.handle('get-license-activation-status', () => {
   migrateLegacyPlaintextFlag(!!store.get('licenseActivated'));
   if (store.get('licenseActivated')) {
@@ -1088,7 +1337,7 @@ ipcMain.handle('get-license-activation-status', () => {
     (process.env.LIMSPLUS_FORCE_ACTIVATION_GATE === '1' ||
       process.env.LIMSPLUS_FORCE_ACTIVATION_GATE === 'true');
   if (forceGate) {
-    return { activated: false, forced: true };
+    return { activated: false, forced: true, activationProfile: null };
   }
   const activated = isLicenseSecurelyActivated();
   if (!app.isPackaged && activated) {
@@ -1096,7 +1345,10 @@ ipcMain.handle('get-license-activation-status', () => {
       '[LimsPlus] Activation gate skipped — license already stored. Run `yarn reset-activation` then restart, or set LIMSPLUS_FORCE_ACTIVATION_GATE=1.',
     );
   }
-  return { activated };
+  return {
+    activated,
+    activationProfile: store.get('activationProfile') ?? null,
+  };
 });
 
 ipcMain.handle(
@@ -1116,19 +1368,111 @@ ipcMain.handle(
   },
 );
 
-/** Called after REST verifies the key — stores activation proof locally (no plaintext key). */
+type PersistLicensePayload =
+  | string
+  | {
+      activationKey: string;
+      profile?: unknown;
+      localLoginCompany?: string;
+    };
+
+/** License proof + company profile (`company.name`, email, mobile) from activation API. */
 ipcMain.handle(
   'persist-license-activation',
-  (_event, activationKey: string) => {
-    const key = typeof activationKey === 'string' ? activationKey.trim() : '';
+  (event, payload: PersistLicensePayload) => {
+    const key =
+      typeof payload === 'string'
+        ? payload.trim()
+        : typeof payload?.activationKey === 'string'
+          ? payload.activationKey.trim()
+          : '';
     if (!key.length) {
       return { ok: false, message: 'Please enter your activation key.' };
     }
     persistSecureActivationRecord(key);
     store.set('licenseActivated', false);
+
+    const profile =
+      typeof payload === 'object' && payload.profile != null
+        ? payload.profile
+        : null;
+    if (profile && typeof profile === 'object') {
+      store.set('activationProfile', profile);
+      broadcastActivationProfileUpdated(event.sender, profile);
+    }
+
+    let companyCode = '';
+    if (typeof payload === 'object') {
+      const fromPayload = payload.localLoginCompany;
+      if (typeof fromPayload === 'string' && fromPayload.trim()) {
+        companyCode = fromPayload.trim();
+      }
+    }
+    if (!companyCode && profile && typeof profile === 'object') {
+      const rec = profile as Record<string, unknown>;
+      const code = rec.code ?? rec.companyCode;
+      if (typeof code === 'string' && code.trim()) companyCode = code.trim();
+    }
+    if (companyCode) {
+      store.set('localLoginCompany', companyCode);
+    }
+
     return { ok: true };
   },
 );
+
+ipcMain.handle('get-local-login-company', () => {
+  return getLocalLoginCompanyCodeFromStore();
+});
+
+function broadcastLicenseActivationCleared(sender: WebContents): void {
+  const notify = (wc: WebContents) => {
+    if (!wc.isDestroyed()) {
+      wc.send('license-activation-cleared');
+    }
+  };
+  notify(sender);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    notify(mainWindow.webContents);
+  }
+}
+
+function broadcastActivationProfileUpdated(
+  sender: WebContents,
+  profile: unknown,
+): void {
+  const notify = (wc: WebContents) => {
+    if (!wc.isDestroyed()) {
+      wc.send('activation-profile-updated', profile);
+    }
+  };
+  notify(sender);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    notify(mainWindow.webContents);
+  }
+}
+
+ipcMain.handle('save-activation-profile', (event, profile: unknown) => {
+  const value = profile && typeof profile === 'object' ? profile : null;
+  store.set('activationProfile', value);
+  broadcastActivationProfileUpdated(event.sender, value);
+  return { ok: true };
+});
+
+ipcMain.handle('get-activation-profile', () => {
+  return store.get('activationProfile') ?? null;
+});
+
+/** Removes local activation (e.g. on sign-out). Plaintext key is never stored. */
+ipcMain.handle('clear-license-activation', (event) => {
+  clearSecureActivationRecord();
+  store.set('licenseActivated', false);
+  store.set('activationProfile', null);
+  store.set('localLoginCompany', '');
+  broadcastActivationProfileUpdated(event.sender, null);
+  broadcastLicenseActivationCleared(event.sender);
+  return { ok: true };
+});
 
 function emitMongoBackupRestoreProgress(
   wc: WebContents,

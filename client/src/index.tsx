@@ -1,4 +1,5 @@
 import './runtime/lims-lite-bootstrap';
+import './runtime/local-login-company';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';

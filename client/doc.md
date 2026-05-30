@@ -11,6 +11,40 @@ Once you have a certificate, you'd add to the win config:
 "certificatePassword": "your-password"
 This is a Windows security requirement — no config change alone can make the "Unknown Publisher" go away without code signing.
 
+## Lite portal (`app/frontend`) — do not edit for runtime config
+
+The folder `client/app/frontend` is **replaced** when you copy a new portal build (`npm run copy-frontend` or similar). Do **not** put activation company code or bootstrap scripts there.
+
+Runtime values are injected by **Electron** when Lite opens:
+
+| What | Where |
+|------|--------|
+| Company code (`REACT_APP_LOCAL_LOGIN_COMPANY`) | `user-preferences.json` → `localLoginCompany`, URL query, `lims-lite-offline.json` |
+| Portal bootstrap + `getLocalCompanyUrl` | `client/electron/limsPortalDesktopBootstrap.js` served at `/lims-portal-desktop-bootstrap.js` |
+| Live config JSON | `/lims-desktop-runtime-config.json` (in-memory while Lite server runs) |
+| Connect app helpers | `client/src/runtime/local-login-company.ts` |
+
+After replacing `app/frontend`, restart `yarn electron:dev` — no changes needed inside the copied build.
+
+### Why `getLocalCompanyUrl` always returned GENEFLOW
+
+The portal build often sets `REACT_APP_LOCAL_LOGIN_COMPANY` to **all codes in one string**:
+
+`GENEFLOW GENEFLOW ACCUSTIX DEMO CONFIG TEST`
+
+`getLocalCompanyUrl` uses `switch (company)` with exact cases (`DEMO`, `GENEFLOW`, …). The full string matches **no** case → `default` → `https://geneflow.limsplus.co.in`.
+
+Electron runtime now:
+
+1. Stores a **single** code from activation (`company.code`, e.g. `DEMO`).
+2. Patches the served `main.*.js` so `process.env.REACT_APP_LOCAL_LOGIN_COMPANY` is that one code.
+3. Bootstrap normalizes multi-word env strings before `switch`.
+4. Patches **all** `static/js/*.js` chunks — Login uses `9701.*.js` with hardcoded `"GENEFLOW …".split(" ")[0]` (always GENEFLOW), not only `main.*.js`.
+
+Setting `REACT_APP_LOCAL_LOGIN_COMPANY=DEMO` in Connect `.env` does **not** change the copied portal build; activation `company.code` + Electron patch does.
+
+Test in Lite DevTools: `getLocalCompanyUrl('DEMO')` → `https://demo.limsplus.co.in`.
+
 ## Dev: activation screen vs LimsPlus Lite
 
 `yarn electron:dev` loads the **connector** on **http://127.0.0.1:3000** (activation → home), not the Lite portal.

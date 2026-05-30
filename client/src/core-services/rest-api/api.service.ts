@@ -65,8 +65,6 @@ export class Service {
         config.headers = {
           ...config.headers,
         };
-        console.log({ config });
-
         return config;
       },
       (error) => {

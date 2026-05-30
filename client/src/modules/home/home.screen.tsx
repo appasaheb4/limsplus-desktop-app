@@ -3,9 +3,19 @@ import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import './style.css';
-import { useNavigate } from 'react-router-dom';
 import AccountModal from './components/modal-account.component';
 import BackupRestoreModal from './components/backup-restore-modal.component';
+import type { DesktopActivationProfile } from '../license-activation/desktop-activation-profile.types';
+import {
+  activationProfileLabel,
+  extractLocalLoginCompanyCode,
+  hasActivationProfileContent,
+} from '../license-activation/desktop-activation-profile.types';
+import {
+  getReactAppLocalLoginCompany,
+  refreshLocalLoginCompanyFromStore,
+  setLocalLoginCompanyCode,
+} from '../../runtime/local-login-company';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -172,14 +182,23 @@ const LIMS_LITE_SETUP_STEPS = [
 ] as const;
 
 
-const Home = observer(() => {
+type HomeProps = {
+  activationProfile?: DesktopActivationProfile | null;
+};
+
+const Home = observer(({ activationProfile: activationProfileProp = null }: HomeProps) => {
   const { integrationGatewayStore } = useStores();
-  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] =
     useState<DashboardSection>('dashboard');
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null);
+  const [activationProfile, setActivationProfile] =
+    useState<DesktopActivationProfile | null>(
+      hasActivationProfileContent(activationProfileProp)
+        ? activationProfileProp
+        : null,
+    );
   const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
   const [limsLiteSetup, setLimsLiteSetup] = useState<{
     modalOpen: boolean;
@@ -197,12 +216,52 @@ const Home = observer(() => {
   const menuRef = useRef<HTMLDivElement>(null);
   const limsLiteInFlight = useRef(false);
 
+  const companyLabel = activationProfileLabel(activationProfile);
+  const displayName = companyLabel || signedInUserId || null;
+
   const userInitial =
-    signedInUserId && signedInUserId.length > 0
-      ? signedInUserId.slice(0, 2).toUpperCase()
+    displayName && displayName.length > 0
+      ? displayName.slice(0, 2).toUpperCase()
       : '—';
 
+  const syncLocalLoginCompany = (profile: DesktopActivationProfile | null) => {
+    const code = extractLocalLoginCompanyCode(profile);
+    if (code) setLocalLoginCompanyCode(code);
+  };
+
   useEffect(() => {
+    if (hasActivationProfileContent(activationProfileProp)) {
+      setActivationProfile(activationProfileProp);
+      syncLocalLoginCompany(activationProfileProp);
+    }
+  }, [activationProfileProp]);
+
+  useEffect(() => {
+    const loadActivationProfile = async () => {
+      if (hasActivationProfileContent(activationProfileProp)) return;
+      try {
+        const stored = (await ipcRenderer.invoke(
+          'get-activation-profile',
+        )) as DesktopActivationProfile | null;
+        const next = hasActivationProfileContent(stored) ? stored : null;
+        setActivationProfile(next);
+        syncLocalLoginCompany(next);
+      } catch (err: unknown) {
+        console.warn('[Home] get-activation-profile failed:', err);
+      }
+    };
+    void loadActivationProfile();
+
+    const onProfileUpdated = (
+      _event: IpcRendererEvent,
+      next: DesktopActivationProfile | null,
+    ) => {
+      const profile = hasActivationProfileContent(next) ? next : null;
+      setActivationProfile(profile);
+      syncLocalLoginCompany(profile);
+    };
+    ipcRenderer.on('activation-profile-updated', onProfileUpdated);
+
     const onSendUser = (_event: IpcRendererEvent, user: User) => {
       setSignedInUserId(user.userId);
       void integrationGatewayStore.integrationGatewayService
@@ -218,9 +277,10 @@ const Home = observer(() => {
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', onSendUser);
     return () => {
+      ipcRenderer.removeListener('activation-profile-updated', onProfileUpdated);
       ipcRenderer.removeListener('send-user', onSendUser);
     };
-  }, [integrationGatewayStore]);
+  }, [integrationGatewayStore, activationProfileProp]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -244,20 +304,19 @@ const Home = observer(() => {
   };
 
   const handleSignOut = async () => {
-    const checkFileExists = async (filePath: string) => {
-      return await ipcRenderer.invoke('check-file-exists', filePath);
-    };
+    try {
+      setLocalLoginCompanyCode(null);
+      await ipcRenderer.invoke('clear-license-activation');
 
-    const userDataPath = await ipcRenderer.invoke('get-user-data-path');
-    const filePath = `${userDataPath}/user-preferences.json`;
+      const userDataPath = await ipcRenderer.invoke('get-user-data-path');
+      const filePath = `${userDataPath}/user-preferences.json`;
+      const fileExists = await ipcRenderer.invoke('check-file-exists', filePath);
 
-    const fileExists = await checkFileExists(filePath);
-
-    if (fileExists) {
-      await ipcRenderer.invoke('remove-file', filePath);
-      navigate('/dashboard');
-    } else {
-      alert('Something Went Wrong..');
+      if (fileExists) {
+        await ipcRenderer.invoke('remove-file', filePath);
+      }
+    } catch {
+      alert('Something went wrong while signing out. Please try again.');
     }
   };
 
@@ -266,6 +325,14 @@ const Home = observer(() => {
   const openOfflineLimsPlusLite = async () => {
     if (limsLiteInFlight.current) {
       return;
+    }
+
+    const companyCode =
+      extractLocalLoginCompanyCode(activationProfile) ||
+      getReactAppLocalLoginCompany() ||
+      (await refreshLocalLoginCompanyFromStore());
+    if (companyCode) {
+      setLocalLoginCompanyCode(companyCode);
     }
     limsLiteInFlight.current = true;
     setLimsLiteSetup({
@@ -301,6 +368,7 @@ const Home = observer(() => {
     try {
       const result = (await ipcRenderer.invoke(
         'prepare-and-open-limsplus-lite',
+        companyCode ? { localLoginCompany: companyCode } : undefined,
       )) as
         | { ok: true; firstRunRestore?: boolean }
         | { ok: false; error?: string; portalIndexPath?: string; backendEntryPath?: string };
@@ -372,7 +440,11 @@ const Home = observer(() => {
                 Signed in
               </span>
               <span id='userId' className='truncate text-sm font-medium text-white'>
-                {signedInUserId ? `Welcome, ${signedInUserId}` : 'Welcome'}
+                {companyLabel
+                  ? `Welcome ${companyLabel}`
+                  : displayName
+                    ? `Welcome ${displayName}`
+                    : 'Welcome'}
               </span>
             </span>
             <svg
@@ -403,10 +475,12 @@ const Home = observer(() => {
                   Account
                 </p>
                 <p className='mt-0.5 truncate text-sm font-semibold text-white'>
-                  {signedInUserId ?? 'Loading…'}
+                  {displayName ?? 'Loading…'}
                 </p>
                 <p className='mt-1 text-xs text-gray-400'>
-                  LIMSPlus desktop session
+                  {companyLabel
+                    ? `Company: ${companyLabel}`
+                    : 'LIMSPlus desktop session'}
                 </p>
               </div>
               <div className='p-1.5'>
@@ -478,7 +552,7 @@ const Home = observer(() => {
       </header>
 
       <div className='flex flex-1 min-h-0'>
-        <aside className='sidebar' aria-label='Main navigation'>
+        <aside className='sidebar flex flex-col' aria-label='Main navigation'>
           <div className='sidebar-nav-label'>Views</div>
           <button
             type='button'
@@ -506,15 +580,41 @@ const Home = observer(() => {
           >
             Clipboard Parser
           </button>
+
+          {hasActivationProfileContent(activationProfile) && (
+            <div className='mt-auto border-t border-white/10 pt-4'>
+              <div className='sidebar-nav-label'>Licensed company</div>
+              <p className='px-3 text-sm font-semibold text-white'>
+                {activationProfileLabel(activationProfile)}
+              </p>
+              {(activationProfile.code || activationProfile.companyCode) && (
+                <p className='px-3 pb-1 text-xs text-gray-500'>
+                  Code:{' '}
+                  {String(
+                    activationProfile.code ?? activationProfile.companyCode,
+                  )}
+                </p>
+              )}
+              {activationProfile.environment && (
+                <p className='px-3 pb-2 text-xs text-gray-500'>
+                  Env: {String(activationProfile.environment)}
+                </p>
+              )}
+            </div>
+          )}
         </aside>
 
         <main className='flex-1 overflow-auto bg-gradient-to-br from-[#1e293b] via-[#1a1a24] to-[#312e81]'>
           {activeSection === 'dashboard' && (
             <div className='p-4'>
               <div className='mb-4 rounded-lg border border-white/10 bg-black/20 p-4 backdrop-blur-sm'>
-                <h1 className='text-lg font-semibold text-white'>Dashboard</h1>
+                <h1 className='text-lg font-semibold text-white'>
+                  {companyLabel ? `Welcome ${companyLabel}` : 'Dashboard'}
+                </h1>
                 <p className='mt-1 text-sm text-gray-400'>
-                  Workspaces, reports, and local configuration shortcuts.
+                  {companyLabel
+                    ? 'Your licensed company workspace on this device.'
+                    : 'Workspaces, reports, and local configuration shortcuts.'}
                 </p>
                 <div className='mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3'>
                   <div className='rounded-md border border-white/10 bg-white/5 px-4 py-3'>
@@ -865,6 +965,7 @@ const Home = observer(() => {
       <AccountModal
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        activationProfile={activationProfile}
       />
     </div>
   );

@@ -1,5 +1,13 @@
 import { service } from '../../core-services/rest-api';
 import { useCallback, useEffect, useState } from 'react';
+import type { DesktopActivationSystemConfig } from './desktop-activation-system-info.types';
+import {
+  buildProfileForStorage,
+  extractLocalLoginCompanyCode,
+} from './desktop-activation-profile.types';
+import {
+  setLocalLoginCompanyCode,
+} from '../../runtime/local-login-company';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -15,14 +23,6 @@ type Props = {
 
 function readOnlineStatus(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine;
-}
-
-function isRemoteActivationSuccess(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
-  const record = data as Record<string, unknown>;
-  if (record.success === true) return true;
-  const list = record.companyList;
-  return Array.isArray(list) && list.length > 0;
 }
 
 export default function ActivationKeyGate({ onActivated }: Props) {
@@ -53,24 +53,39 @@ export default function ActivationKeyGate({ onActivated }: Props) {
         };
       }
       try {
-        const result = await service
-          .post('/company/companyFindByFields', {
-            desktopAppConfiguration: { activeKey: trimmed },
-          })
-          .then((response) => response.data);
-          console.log({result});
-          
+        const systemConfig = (await ipcRenderer.invoke(
+          'get-desktop-activation-system-info',
+        )) as DesktopActivationSystemConfig;
 
-        if (!isRemoteActivationSuccess(result)) {
+        const result = (await service
+          .post('/company/activationDesktopApp', {
+            filter: {
+              activeKey: trimmed,
+              systemConfig,
+            },
+          })
+          .then((response) => response.data)) as {
+          success?: boolean;
+          message?: string;
+          company?: Record<string, unknown>;
+        };
+
+        if (!result?.success) {
           return {
             ok: false,
-            message: 'Invalid activation key. Please check and try again.',
+            message:
+             result.message ?? 'Invalid activation key. Please check and try again.',
           };
         }
 
+        const profile = buildProfileForStorage(
+          result.company ?? result,
+        );
+        const companyCode = extractLocalLoginCompanyCode(profile);
+
         const persisted = (await ipcRenderer.invoke(
           'persist-license-activation',
-          trimmed,
+          { activationKey: trimmed, profile, localLoginCompany: companyCode },
         )) as { ok?: boolean; message?: string };
 
         if (!persisted?.ok) {
@@ -82,7 +97,13 @@ export default function ActivationKeyGate({ onActivated }: Props) {
           };
         }
 
-        return { ok: true };
+        if (companyCode) {
+          setLocalLoginCompanyCode(companyCode);
+        }
+        return {
+          ok: true,
+          message: result.message ?? 'Activation successful.',
+        };
       } catch {
         return {
           ok: false,
