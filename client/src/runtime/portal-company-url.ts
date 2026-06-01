@@ -7,8 +7,7 @@ export const PORTAL_COMPANY_BASE_URLS: Record<string, string> = {
   TEST: 'https://test.limsplus.co.in',
 };
 
-export const PORTAL_COMPANY_URL_DEFAULT =
-  PORTAL_COMPANY_BASE_URLS.GENEFLOW;
+export const PORTAL_COMPANY_URL_DEFAULT = PORTAL_COMPANY_BASE_URLS.GENEFLOW;
 
 const KNOWN_COMPANY_CODES = Object.keys(PORTAL_COMPANY_BASE_URLS);
 
@@ -43,6 +42,7 @@ export function normalizePortalCompanyCode(
  */
 export function getLocalCompanyUrl(company: string): string {
   const code = normalizePortalCompanyCode(company);
+  console.log({ code });
   if (!code) return PORTAL_COMPANY_URL_DEFAULT;
   return PORTAL_COMPANY_BASE_URLS[code] ?? PORTAL_COMPANY_URL_DEFAULT;
 }

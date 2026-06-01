@@ -127,8 +127,6 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
   };
 
   const runOperation = async () => {
-    // return  how to here show popup like Work in progress
-    return alert('Work in progress');
     if (!selectedPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);

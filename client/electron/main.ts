@@ -81,9 +81,15 @@ const LIMS_PORTAL_RUNTIME_CONFIG_PATH = '/lims-desktop-runtime-config.json';
 /** All CRA chunks under `static/js` (Login uses 9701.*.js, not only `main.*.js`). */
 const PORTAL_STATIC_JS_PATH_RE = /^\/static\/js\/[^/]+\.js$/;
 
-/** Baked at portal build — Login does `.split(" ")[0]` → always GENEFLOW. */
-const PORTAL_BAKED_MULTI_COMPANY_LITERAL =
-  'GENEFLOW GENEFLOW ACCUSTIX DEMO CONFIG TEST';
+/** Portal `.env` list variants (order differs between builds). */
+const PORTAL_BAKED_COMPANY_LIST_LITERALS = [
+  'GENEFLOW GENEFLOW ACCUSTIX DEMO CONFIG TEST',
+  'DEMO GENEFLOW ACCUSTIX DEMO CONFIG TEST',
+] as const;
+
+/** Login chunk: `v("DEMO GENEFLOW …".split(" ")[0]||"GENEFLOW")` — first token may be DEMO. */
+const PORTAL_LOGIN_WEBPORTAL_SPLIT_RE =
+  /"([A-Z][A-Z0-9 ]{8,120})"\.split\(" "\)\[0\]\|\|"GENEFLOW"/g;
 const LIMS_PORTAL_BOOTSTRAP_SCRIPT_TAG = `<script src="${LIMS_PORTAL_BOOTSTRAP_URL_PATH}"></script>`;
 
 function stopLimsPortalStaticServer(): void {
@@ -151,23 +157,17 @@ function patchPortalJsSource(source: string): string {
   let out = source;
   if (company) {
     const escaped = escapeForJsDoubleQuotedString(company);
-    const baked = escapeForJsDoubleQuotedString(
-      PORTAL_BAKED_MULTI_COMPANY_LITERAL,
-    );
     out = out.replace(
       /REACT_APP_LOCAL_LOGIN_COMPANY:"[^"]*"/g,
       `REACT_APP_LOCAL_LOGIN_COMPANY:"${escaped}"`,
     );
-    if (out.includes(PORTAL_BAKED_MULTI_COMPANY_LITERAL)) {
-      out = out.split(PORTAL_BAKED_MULTI_COMPANY_LITERAL).join(company);
+    for (const literal of PORTAL_BAKED_COMPANY_LIST_LITERALS) {
+      if (out.includes(literal)) {
+        out = out.split(literal).join(company);
+      }
     }
-    /** Login chunk: `v("GENEFLOW …".split(" ")[0]||"GENEFLOW")` — first token is always GENEFLOW. */
-    const splitFirstGeneflow = new RegExp(
-      `"${baked}"\\.split\\(" "\\)\\[0\\]\\|\\|"GENEFLOW"`,
-      'g',
-    );
-    const runtimeCompanyExpr = `(function(){try{var c=sessionStorage.getItem("REACT_APP_LOCAL_LOGIN_COMPANY");return c&&c.trim()?c.trim():"${escaped}";}catch(e){return"${escaped}";}})()`;
-    out = out.replace(splitFirstGeneflow, runtimeCompanyExpr);
+    /** Use activation code directly — not `.split(" ")[0]` (often DEMO in new builds). */
+    out = out.replace(PORTAL_LOGIN_WEBPORTAL_SPLIT_RE, `"${escaped}"`);
   }
   if (apiBase) {
     const graphql = `${apiBase.replace(/\/$/, '')}/graphql`;
@@ -1075,15 +1075,12 @@ ipcMain.handle(
           redactMongoUriForLogs(mongoUri),
         );
       }
-
       const alreadyRestored = !!store.get('limsOfflineDbRestored');
-
       emitLitePhase(
         wc,
         3,
         'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
       );
-
       let restoreOutcome;
       try {
         restoreOutcome = await restoreFromBundledDumpIfNeeded(
@@ -1100,13 +1097,11 @@ ipcMain.handle(
           error: errText,
         };
       }
-
       emitLitePhase(
         wc,
         4,
         'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
       );
-
       let liteApiBaseUrl: string;
       let liteApiPort: number;
       try {

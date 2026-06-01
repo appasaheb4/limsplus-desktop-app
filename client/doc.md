@@ -39,7 +39,7 @@ Electron runtime now:
 1. Stores a **single** code from activation (`company.code`, e.g. `DEMO`).
 2. Patches the served `main.*.js` so `process.env.REACT_APP_LOCAL_LOGIN_COMPANY` is that one code.
 3. Bootstrap normalizes multi-word env strings before `switch`.
-4. Patches **all** `static/js/*.js` chunks — Login uses `9701.*.js` with hardcoded `"GENEFLOW …".split(" ")[0]` (always GENEFLOW), not only `main.*.js`.
+4. Patches **all** `static/js/*.js` chunks — Login uses `9701.*.js` with `"DEMO GENEFLOW …".split(" ")[0]` (first token is often **DEMO** in newer builds), replaced with your activation code.
 
 Setting `REACT_APP_LOCAL_LOGIN_COMPANY=DEMO` in Connect `.env` does **not** change the copied portal build; activation `company.code` + Electron patch does.
 

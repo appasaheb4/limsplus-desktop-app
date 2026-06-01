@@ -112,9 +112,9 @@
   var preferred =
     cfg && typeof cfg === 'object' ? trim(cfg.localLoginCompany) : '';
 
-  var company = firstFromQuery(COMPANY_QUERY);
+  /** Electron runtime config wins over URL query and stale sessionStorage. */
+  var company = preferred || firstFromQuery(COMPANY_QUERY);
   var apiBase = firstFromQuery(API_QUERY);
-  if (!company && preferred) company = preferred;
   if (!apiBase && cfg && typeof cfg === 'object')
     apiBase = trim(cfg.apiBaseUrl);
   if (company) applyCompanyToEnv(company, preferred);
