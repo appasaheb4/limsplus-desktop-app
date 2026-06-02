@@ -175,7 +175,7 @@ const LIMS_LITE_SETUP_STEPS = [
       'Writes lims-lite-offline.json (Mongo URI + Lite API URL) for tools and portal config.',
   },
   {
-    title: 'Open LimsPlus Lite',
+    title: 'Open LIMSPLUS Lite',
     blurb:
       'Serves the SPA with serve-handler and opens the Lite window fullscreen.',
   },
@@ -215,6 +215,11 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
   });
   const menuRef = useRef<HTMLDivElement>(null);
   const limsLiteInFlight = useRef(false);
+  const [liteFirstSetupComplete, setLiteFirstSetupComplete] = useState(false);
+  const [limsLiteOpening, setLimsLiteOpening] = useState<{
+    active: boolean;
+    error: string | null;
+  }>({ active: false, error: null });
 
   const companyLabel = activationProfileLabel(activationProfile);
   const displayName = companyLabel || signedInUserId || null;
@@ -283,6 +288,24 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
   }, [integrationGatewayStore, activationProfileProp]);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadFirstSetupFlag = async () => {
+      try {
+        const done = (await ipcRenderer.invoke(
+          'get-lims-lite-first-setup-complete',
+        )) as boolean;
+        if (!cancelled && done) setLiteFirstSetupComplete(true);
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadFirstSetupFlag();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -334,6 +357,59 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
     if (companyCode) {
       setLocalLoginCompanyCode(companyCode);
     }
+
+    const ipcPayload = companyCode
+      ? { localLoginCompany: companyCode }
+      : undefined;
+
+    const formatLiteOpenError = (
+      result: { error?: string; portalIndexPath?: string; backendEntryPath?: string },
+      fallback: string,
+    ) => {
+      let msg = result.error ?? fallback;
+      if (result.portalIndexPath) {
+        msg += `\n\nPortal path:\n${result.portalIndexPath}\n(from repo root: npm run copy-frontend)`;
+      }
+      if (result.backendEntryPath) {
+        msg += `\n\nNest API bundle:\n${result.backendEntryPath}\n(cd client/app/backend && npm install && npm run build)`;
+      }
+      return msg;
+    };
+
+    if (liteFirstSetupComplete) {
+      limsLiteInFlight.current = true;
+      setLimsLiteOpening({ active: true, error: null });
+      try {
+        const result = (await ipcRenderer.invoke(
+          'open-limsplus-lite',
+          ipcPayload,
+        )) as {
+          ok: boolean;
+          error?: string;
+          portalIndexPath?: string;
+          backendEntryPath?: string;
+        };
+        if (result.ok) {
+          return;
+        }
+        setLimsLiteOpening({
+          active: true,
+          error: formatLiteOpenError(
+            result,
+            'Could not open LIMSPLUS Lite. Check Electron logs.',
+          ),
+        });
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Could not open LIMSPLUS Lite.';
+        setLimsLiteOpening({ active: true, error: msg });
+      } finally {
+        limsLiteInFlight.current = false;
+        setLimsLiteOpening((s) => (s.error ? s : { active: false, error: null }));
+      }
+      return;
+    }
+
     limsLiteInFlight.current = true;
     setLimsLiteSetup({
       modalOpen: true,
@@ -368,12 +444,13 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
     try {
       const result = (await ipcRenderer.invoke(
         'prepare-and-open-limsplus-lite',
-        companyCode ? { localLoginCompany: companyCode } : undefined,
+        ipcPayload,
       )) as
         | { ok: true; firstRunRestore?: boolean }
         | { ok: false; error?: string; portalIndexPath?: string; backendEntryPath?: string };
 
       if (result.ok) {
+        setLiteFirstSetupComplete(true);
         setLimsLiteSetup({
           modalOpen: false,
           loading: false,
@@ -384,19 +461,13 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         return;
       }
 
-      let msg =
-        result.error ??
-        'Could not prepare LimsPlus Lite. Check Electron logs.';
-      if ('portalIndexPath' in result && result.portalIndexPath) {
-        msg += `\n\nPortal path:\n${result.portalIndexPath}\n(from repo root: npm run copy-frontend)`;
-      }
-      if ('backendEntryPath' in result && result.backendEntryPath) {
-        msg += `\n\nNest API bundle:\n${result.backendEntryPath}\n(cd client/app/backend && npm install && npm run build)`;
-      }
       setLimsLiteSetup((s) => ({
         ...s,
         loading: false,
-        bannerError: s.bannerError ?? msg,
+        bannerError: s.bannerError ?? formatLiteOpenError(
+          result,
+          'Could not prepare LIMSPLUS Lite. Check Electron logs.',
+        ),
       }));
     } finally {
       ipcRenderer.removeListener('lims-lite-setup-progress', onProg);
@@ -660,13 +731,15 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                     </button>
                     <button
                       type='button'
-                      className={`item ${limsLiteSetup.loading ? 'cursor-wait opacity-70 pointer-events-none' : ''}`}
-                      disabled={limsLiteSetup.loading}
+                      className={`item ${limsLiteSetup.loading || limsLiteOpening.active ? 'cursor-wait opacity-70 pointer-events-none' : ''}`}
+                      disabled={limsLiteSetup.loading || limsLiteOpening.active}
                       onClick={() => void openOfflineLimsPlusLite()}
                     >
                       {limsLiteSetup.loading
-                        ? 'Preparing LimsPlus Lite…'
-                        : 'LimsPlus Lite'}
+                        ? 'Preparing LIMSPLUS Lite…'
+                        : limsLiteOpening.active
+                          ? 'Opening LIMSPLUS Lite…'
+                          : 'LIMSPLUS Lite'}
                     </button>
                     <button className='item'>HL7 Message</button>
                   </div>
@@ -811,6 +884,48 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         </main>
       </div>
 
+      {limsLiteOpening.active && (
+        <div
+          className='fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm'
+          role='status'
+          aria-live='polite'
+          aria-busy={!limsLiteOpening.error}
+        >
+          <div className='w-full max-w-sm rounded-xl border border-white/10 bg-[#1e1e1e] px-8 py-10 text-center shadow-2xl'>
+            {limsLiteOpening.error ? (
+              <>
+                <p className='text-sm text-rose-200 whitespace-pre-wrap'>
+                  {limsLiteOpening.error}
+                </p>
+                <button
+                  type='button'
+                  className='mt-6 w-full rounded-lg border border-white/15 bg-white/10 py-2.5 text-sm font-medium text-white transition hover:bg-white/15'
+                  onClick={() =>
+                    setLimsLiteOpening({ active: false, error: null })
+                  }
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div className='relative mx-auto mb-6 h-16 w-16' aria-hidden>
+                  <span className='absolute inset-0 rounded-full border-2 border-[#00bcd4]/25' />
+                  <span className='absolute inset-0 rounded-full border-2 border-transparent border-t-[#00bcd4] animate-spin' />
+                  <span className='absolute inset-2 rounded-full border-2 border-transparent border-b-[#00bcd4]/60 animate-spin [animation-duration:1.4s] [animation-direction:reverse]' />
+                </div>
+                <p className='text-base font-semibold text-white'>
+                  Opening LIMSPLUS Lite
+                </p>
+                <p className='mt-2 text-sm text-gray-400'>
+                  Starting services and loading the portal…
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {limsLiteSetup.modalOpen && (
         <div
           className='fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm'
@@ -857,7 +972,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                   id='lims-lite-setup-title'
                   className='text-lg font-semibold text-white'
                 >
-                  LimsPlus Lite setup
+                  LIMSPLUS Lite setup
                 </h2>
                 <p className='mt-1 text-sm text-gray-400'>
                   Follow these steps. The first launch is slower while MongoDB

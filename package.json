@@ -5,8 +5,8 @@
   "scripts": {
     "bump-version-patch": "node scripts/bump-root-version-patch.js",
     "build-react": "cd ../limsplus-portal && yarn build",
-    "copy-frontend": "node scripts/copy-lite-frontend.js",
-    "copy-backend": "node scripts/copy-lite-backend.js",
+    "copy-frontend": "rm -rf client/app/frontend && node scripts/copy-lite-frontend.js",
+    "copy-backend": "rm -rf client/app/backend && node scripts/copy-lite-backend.js",
     "copy": "yarn copy-frontend && yarn copy-backend",
     "bundle-lite-resources": "node scripts/copy-lite-frontend.js && node scripts/copy-lite-backend.js",
     "build-server": "cd client && node build-server.js",

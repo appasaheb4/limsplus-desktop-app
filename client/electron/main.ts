@@ -961,7 +961,11 @@ async function ensureLocalLimsPlusLiteWindowOpen(
   });
 }
 
-type PrepareLimsLitePayload = { localLoginCompany?: string };
+type PrepareLimsLitePayload = {
+  localLoginCompany?: string;
+  /** When true, do not send step progress to the setup modal (repeat opens use a loader only). */
+  silent?: boolean;
+};
 
 function resolveLocalLoginCompanyForLite(
   payload?: PrepareLimsLitePayload,
@@ -974,26 +978,30 @@ function resolveLocalLoginCompanyForLite(
   return getLocalLoginCompanyCodeFromStore();
 }
 
-ipcMain.handle(
-  'prepare-and-open-limsplus-lite',
-  async (
-    event,
-    payload?: PrepareLimsLitePayload,
-  ): Promise<PrepareLimsLiteResult> => {
-    const wc = event.sender;
-    const companyCodeForLite = resolveLocalLoginCompanyForLite(payload);
-    if (!isLicenseSecurelyActivated()) {
-      const msg =
-        'Activate LimsPlus Connect with your license key before opening LimsPlus Lite.';
-      emitLiteSetupProgress(wc, { phase: 'error', message: msg });
-      return { ok: false, error: msg };
-    }
-    try {
-      emitLitePhase(
-        wc,
-        1,
-        'Checking frontend (client/app/frontend) and Nest Lite API (backend: main.js or dist/main.js)...',
-      );
+async function prepareAndOpenLimsPlusLite(
+  wc: WebContents,
+  payload?: PrepareLimsLitePayload,
+): Promise<PrepareLimsLiteResult> {
+  const silent = payload?.silent === true;
+  const emitPhase = (step: number, hint?: string) => {
+    if (!silent) emitLitePhase(wc, step, hint);
+  };
+  const emitError = (message: string) => {
+    if (!silent) emitLiteSetupProgress(wc, { phase: 'error', message });
+  };
+
+  const companyCodeForLite = resolveLocalLoginCompanyForLite(payload);
+  if (!isLicenseSecurelyActivated()) {
+    const msg =
+      'Activate LimsPlus Connect with your license key before opening LimsPlus Lite.';
+    emitError(msg);
+    return { ok: false, error: msg };
+  }
+  try {
+    emitPhase(
+      1,
+      'Checking frontend (client/app/frontend) and Nest Lite API (backend: main.js or dist/main.js)...',
+    );
 
       const indexPath = getPortalBuildIndexPath();
       const backendEntryPath = getLiteBackendEntryPath();
@@ -1007,10 +1015,7 @@ ipcMain.handle(
 
       if (!fs.existsSync(indexPath)) {
         const msg = `Portal build not found:\n${indexPath}`;
-        emitLiteSetupProgress(wc, {
-          phase: 'error',
-          message: msg,
-        });
+        emitError(msg);
         return {
           ok: false,
           error: msg,
@@ -1020,7 +1025,7 @@ ipcMain.handle(
 
       if (!fs.existsSync(backendEntryPath)) {
         const msg = `Nest Lite API not built (missing):\n${backendEntryPath}`;
-        emitLiteSetupProgress(wc, { phase: 'error', message: msg });
+        emitError(msg);
         return {
           ok: false,
           error: msg,
@@ -1037,16 +1042,14 @@ ipcMain.handle(
 
       const externalMongoUri = getLiteExternalMongoUriFromEnv();
       if (externalMongoUri) {
-        emitLitePhase(
-          wc,
+        emitPhase(
           2,
           `Using MongoDB from LIMSPLUS_LITE_EXTERNAL_MONGO_URI (${redactMongoUriForLogs(
             externalMongoUri,
           )}) — embedded MongoDB is skipped. Ensure mongod is running.`,
         );
       } else {
-        emitLitePhase(
-          wc,
+        emitPhase(
           2,
           `Downloading or starting MongoDB (${LIMS_LITE_MONGO_LOOPBACK_BIND}, default tcp ${LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT} — stops other listeners on that port unless LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1; first launch may download server files)...`,
         );
@@ -1063,8 +1066,7 @@ ipcMain.handle(
         liteMongoTcpPortForJson = embedded.listenPort;
       }
 
-      emitLitePhase(
-        wc,
+      emitPhase(
         2,
         `Verifying MongoDB accepts connections (${redactMongoUriForLogs(mongoUri)})…`,
       );
@@ -1076,8 +1078,7 @@ ipcMain.handle(
         );
       }
       const alreadyRestored = !!store.get('limsOfflineDbRestored');
-      emitLitePhase(
-        wc,
+      emitPhase(
         3,
         'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
       );
@@ -1091,14 +1092,13 @@ ipcMain.handle(
         console.error(restoreErr);
         const errText =
           restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
-        emitLiteSetupProgress(wc, { phase: 'error', message: errText });
+        emitError(errText);
         return {
           ok: false,
           error: errText,
         };
       }
-      emitLitePhase(
-        wc,
+      emitPhase(
         4,
         'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
       );
@@ -1118,12 +1118,11 @@ ipcMain.handle(
         console.error(nestErr);
         const errText =
           nestErr instanceof Error ? nestErr.message : String(nestErr);
-        emitLiteSetupProgress(wc, { phase: 'error', message: errText });
+        emitError(errText);
         return { ok: false, error: errText };
       }
 
-      emitLitePhase(
-        wc,
+      emitPhase(
         5,
         'Writing lims-lite-offline.json (Mongo + API URLs for tooling and the portal)...',
       );
@@ -1163,23 +1162,20 @@ ipcMain.handle(
           liteApiBaseUrl,
           companyCodeForLite,
         );
-        emitLitePhase(
-          wc,
-          6,
-          `Frontend static server ready — opening ${portalUrl}`,
-        );
+        emitPhase(6, `Frontend static server ready — opening ${portalUrl}`);
         await ensureLocalLimsPlusLiteWindowOpen(portalUrl, companyCodeForLite);
       } catch (serveErr: unknown) {
         stopLiteNestBackend();
         const detail =
           serveErr instanceof Error ? serveErr.message : String(serveErr);
         const msg = `Failed to start Lite portal UI server:\n${detail}`;
-        emitLiteSetupProgress(wc, { phase: 'error', message: msg });
+        emitError(msg);
         return { ok: false, error: msg };
       }
 
       /** After first successful Lite prep, always use persisted embedded Mongo — not client/database/dump on every launch. */
       store.set('limsOfflineDbRestored', true);
+      store.set('limsLiteFirstSetupComplete', true);
 
       return {
         ok: true,
@@ -1187,19 +1183,39 @@ ipcMain.handle(
         databaseName: restoreOutcome.databaseName,
         firstRunRestore: restoreOutcome.didRestore,
       };
-    } catch (e: unknown) {
-      console.error(e);
-      const msg = e instanceof Error ? e.message : String(e);
-      emitLiteSetupProgress(wc, {
-        phase: 'error',
-        message: msg,
-      });
-      return {
-        ok: false,
-        error: msg,
-      };
-    }
-  },
+  } catch (e: unknown) {
+    console.error(e);
+    const msg = e instanceof Error ? e.message : String(e);
+    emitError(msg);
+    return {
+      ok: false,
+      error: msg,
+    };
+  }
+}
+
+ipcMain.handle('get-lims-lite-first-setup-complete', () => {
+  if (store.get('limsLiteFirstSetupComplete')) return true;
+  const offlineJson = path.join(
+    app.getPath('userData'),
+    'lims-lite-offline.json',
+  );
+  if (fs.existsSync(offlineJson)) {
+    store.set('limsLiteFirstSetupComplete', true);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle(
+  'prepare-and-open-limsplus-lite',
+  async (event, payload?: PrepareLimsLitePayload) =>
+    prepareAndOpenLimsPlusLite(event.sender, payload),
+);
+
+/** Repeat opens: start stack + portal without the first-time setup modal. */
+ipcMain.handle('open-limsplus-lite', async (event, payload?: PrepareLimsLitePayload) =>
+  prepareAndOpenLimsPlusLite(event.sender, { ...payload, silent: true }),
 );
 
 app.on('before-quit', async (event) => {
