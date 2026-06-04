@@ -827,11 +827,36 @@ export function shouldReimportBundledDumpWhenArtifactChanges(): boolean {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
+export type RestoreFromBundledDumpOptions = {
+  /** First-time Lite setup: drop target DB and import bundled dump even if already seeded. */
+  forceFreshImport?: boolean;
+};
+
+/** Drops the Lite database on embedded/local Mongo (used before first-time seed). */
+export async function dropLiteMongoDatabase(
+  mongoUri: string,
+  dbName: string = DEFAULT_LITE_DB_NAME,
+): Promise<void> {
+  const client = new MongoClient(mongoUri);
+  await client.connect();
+  try {
+    await client.db(dbName).dropDatabase();
+    if (!app.isPackaged) {
+      console.info('[LimsPlus Lite] Dropped MongoDB database:', dbName);
+    }
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 export async function restoreFromBundledDumpIfNeeded(
   mongoUri: string,
   isAlreadyRestored: boolean,
+  options?: RestoreFromBundledDumpOptions,
 ): Promise<RestoreDumpResult> {
-  const forceBundledRestore = shouldForceLiteBundledDatabaseRestore();
+  const forceBundledRestore =
+    shouldForceLiteBundledDatabaseRestore() ||
+    options?.forceFreshImport === true;
   const ignoreBundledFingerprint = shouldIgnoreBundledZipFingerprintChanges();
 
   const clientDbRoot = getLiteBundledDatabaseDirectory();
@@ -944,7 +969,11 @@ export async function restoreFromBundledDumpIfNeeded(
     };
   }
 
-  if (
+  if (options?.forceFreshImport) {
+    console.info(
+      '[LimsPlus Lite] First-time setup — dropping existing database and importing bundled backup.',
+    );
+  } else if (
     forceBundledRestore &&
     (!priorFingerprint ||
       bundledArtifactFingerprintsMatch(priorFingerprint, liveFingerprint))

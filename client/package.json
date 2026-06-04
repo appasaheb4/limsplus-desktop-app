@@ -17,6 +17,7 @@
     "dev:with-rdt": "cross-env LIMSPLUS_REACT_DEVTOOLS=true yarn dev",
     "dev:debug-ui": "cross-env LIMSPLUS_OPEN_DEVTOOLS=true LIMSPLUS_REACT_DEVTOOLS=true yarn dev",
     "reset-activation": "node scripts/clear-license-activation.js",
+    "reset-lims-lite-setup": "node scripts/reset-lims-lite-setup.js",
     "electron:dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && cross-env LIMSPLUS_OPEN_DEVTOOLS=true LIMSPLUS_CONNECT_DEV_URL=http://127.0.0.1:3000 NODE_OPTIONS= electron .\"",
     "electron:dev:activation": "yarn reset-activation && yarn electron:dev",
     "electron:dev:no-devtools": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && cross-env LIMSPLUS_OPEN_DEVTOOLS=false LIMSPLUS_CONNECT_DEV_URL=http://127.0.0.1:3000 NODE_OPTIONS= electron .\"",

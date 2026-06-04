@@ -15,6 +15,9 @@ import {
   ensureLiteMongoRunning,
   waitUntilLiteMongoAcceptsConnections,
   stopLiteMongoServer,
+  DEFAULT_LITE_DB_NAME,
+  dropLiteMongoDatabase,
+  readLiteBundledRestoreArtifactFingerprint,
   restoreFromBundledDumpIfNeeded,
   isLiteMongoServerActive,
   getLiteMongoPlatformSummary,
@@ -965,6 +968,8 @@ type PrepareLimsLitePayload = {
   localLoginCompany?: string;
   /** When true, do not send step progress to the setup modal (repeat opens use a loader only). */
   silent?: boolean;
+  /** First-time setup wizard: drop existing DB and re-import bundled backup; show all steps in the modal. */
+  firstTimeSetup?: boolean;
 };
 
 function resolveLocalLoginCompanyForLite(
@@ -983,6 +988,11 @@ async function prepareAndOpenLimsPlusLite(
   payload?: PrepareLimsLitePayload,
 ): Promise<PrepareLimsLiteResult> {
   const silent = payload?.silent === true;
+  /** Wizard (steps popup + drop DB): only non-silent prepare; repeat opens use silent loader. */
+  const isFirstTimeSetup =
+    !silent &&
+    (payload?.firstTimeSetup === true ||
+      !store.get('limsLiteSetupWizardComplete'));
   const emitPhase = (step: number, hint?: string) => {
     if (!silent) emitLitePhase(wc, step, hint);
   };
@@ -1077,16 +1087,42 @@ async function prepareAndOpenLimsPlusLite(
           redactMongoUriForLogs(mongoUri),
         );
       }
-      const alreadyRestored = !!store.get('limsOfflineDbRestored');
-      emitPhase(
-        3,
-        'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
-      );
+      const alreadyRestored = isFirstTimeSetup
+        ? false
+        : !!store.get('limsOfflineDbRestored');
+      if (isFirstTimeSetup) {
+        store.set('limsOfflineDbRestored', false);
+        emitPhase(
+          3,
+          'Dropping existing local MongoDB database and importing fresh bundled backup…',
+        );
+        try {
+          const dbNames = new Set<string>([DEFAULT_LITE_DB_NAME]);
+          const prior = readLiteBundledRestoreArtifactFingerprint();
+          if (prior?.lastDatabaseName) {
+            dbNames.add(prior.lastDatabaseName);
+          }
+          for (const dbName of dbNames) {
+            await dropLiteMongoDatabase(mongoUri, dbName);
+          }
+        } catch (dropErr: unknown) {
+          const errText =
+            dropErr instanceof Error ? dropErr.message : String(dropErr);
+          emitError(errText);
+          return { ok: false, error: errText };
+        }
+      } else {
+        emitPhase(
+          3,
+          'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
+        );
+      }
       let restoreOutcome;
       try {
         restoreOutcome = await restoreFromBundledDumpIfNeeded(
           mongoUri,
           alreadyRestored,
+          { forceFreshImport: isFirstTimeSetup },
         );
       } catch (restoreErr: unknown) {
         console.error(restoreErr);
@@ -1175,7 +1211,9 @@ async function prepareAndOpenLimsPlusLite(
 
       /** After first successful Lite prep, always use persisted embedded Mongo — not client/database/dump on every launch. */
       store.set('limsOfflineDbRestored', true);
-      store.set('limsLiteFirstSetupComplete', true);
+      if (!silent) {
+        store.set('limsLiteSetupWizardComplete', true);
+      }
 
       return {
         ok: true,
@@ -1194,18 +1232,9 @@ async function prepareAndOpenLimsPlusLite(
   }
 }
 
-ipcMain.handle('get-lims-lite-first-setup-complete', () => {
-  if (store.get('limsLiteFirstSetupComplete')) return true;
-  const offlineJson = path.join(
-    app.getPath('userData'),
-    'lims-lite-offline.json',
-  );
-  if (fs.existsSync(offlineJson)) {
-    store.set('limsLiteFirstSetupComplete', true);
-    return true;
-  }
-  return false;
-});
+ipcMain.handle('get-lims-lite-first-setup-complete', () =>
+  Boolean(store.get('limsLiteSetupWizardComplete')),
+);
 
 ipcMain.handle(
   'prepare-and-open-limsplus-lite',

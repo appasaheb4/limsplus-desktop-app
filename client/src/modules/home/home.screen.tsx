@@ -162,7 +162,7 @@ const LIMS_LITE_SETUP_STEPS = [
   {
     title: 'Restore database backup',
     blurb:
-      'Imports client/database/dump only on first run; later runs read live local MongoDB (your backend changes).',
+      'First setup: drops any existing local MongoDB database and imports the bundled backup. Later opens use your live local data.',
   },
   {
     title: 'Start NestJS API locally',
@@ -376,7 +376,17 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
       return msg;
     };
 
-    if (liteFirstSetupComplete) {
+    let wizardComplete = liteFirstSetupComplete;
+    try {
+      wizardComplete = Boolean(
+        await ipcRenderer.invoke('get-lims-lite-first-setup-complete'),
+      );
+      setLiteFirstSetupComplete(wizardComplete);
+    } catch {
+      /* use cached state */
+    }
+
+    if (wizardComplete) {
       limsLiteInFlight.current = true;
       setLimsLiteOpening({ active: true, error: null });
       try {
@@ -411,6 +421,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
     }
 
     limsLiteInFlight.current = true;
+    setLimsLiteOpening({ active: false, error: null });
     setLimsLiteSetup({
       modalOpen: true,
       loading: true,
@@ -444,7 +455,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
     try {
       const result = (await ipcRenderer.invoke(
         'prepare-and-open-limsplus-lite',
-        ipcPayload,
+        { ...ipcPayload, firstTimeSetup: true },
       )) as
         | { ok: true; firstRunRestore?: boolean }
         | { ok: false; error?: string; portalIndexPath?: string; backendEntryPath?: string };
@@ -884,7 +895,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         </main>
       </div>
 
-      {limsLiteOpening.active && (
+      {limsLiteOpening.active && !limsLiteSetup.modalOpen && (
         <div
           className='fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm'
           role='status'
