@@ -42,6 +42,8 @@ function main() {
   clientPkg.version = next;
   writePkg(clientPkgPath, clientPkg);
 
+  require('./sync-lite-product-name.js');
+
   console.info(`[version] bumped ${prev} → ${next} (root + client synced)`);
 }
 

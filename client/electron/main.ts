@@ -543,6 +543,12 @@ let isLiteMongoQuitHandling = false;
 const isDev = !app.isPackaged;
 process.env.NODE_ENV = 'production';
 
+/** Packaged name from electron-builder `productName` (e.g. LIMSPLUS Lite 1.0.10). */
+function getPackagedAppDisplayName(): string {
+  const name = app.getName()?.trim();
+  return name || `LIMSPLUS Lite ${app.getVersion()}`;
+}
+
 /** Connector React dev server (CRA), default port 3000. Override with `LIMSPLUS_CONNECT_DEV_URL`. */
 function getConnectorDevUrl(): string {
   const raw = process.env.LIMSPLUS_CONNECT_DEV_URL?.trim();
@@ -579,7 +585,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
     height: 768,
-    title: 'LimsPlus Connect',
+    title: isDev ? 'LimsPlus Connect' : getPackagedAppDisplayName(),
     resizable: false,
     icon: path.join(__dirname, '../assets/icon.ico'),
     skipTaskbar: true,
@@ -858,7 +864,7 @@ async function ensureLocalLimsPlusLiteWindowOpen(
 
   limsPlusLiteWindow = new BrowserWindow({
     show: false,
-    title: 'LimsPlus Lite',
+    title: isDev ? 'LimsPlus Lite' : getPackagedAppDisplayName(),
     backgroundColor: '#1a1a1a',
     autoHideMenuBar: true,
     webPreferences: {

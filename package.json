@@ -1,6 +1,6 @@
 {
   "name": "limsplus-desktop-app",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "main": "client/main.js",
   "scripts": {
     "bump-version-patch": "node scripts/bump-root-version-patch.js",
@@ -12,8 +12,8 @@
     "build-server": "cd client && node build-server.js",
     "build:client:win": "cd client && yarn install && yarn run electron:build-win",
     "build:client:mac": "cd client && yarn install && yarn run electron:build-mac",
-    "build:win": "yarn run bundle-lite-resources && yarn run build-server && yarn run build:client:win",
-    "build:mac": "yarn run bundle-lite-resources && yarn run build-server && yarn run build:client:mac",
+    "build:win": "yarn run bundle-lite-resources && yarn run build-server && node scripts/sync-lite-product-name.js && yarn run build:client:win",
+    "build:mac": "yarn run bundle-lite-resources && yarn run build-server && node scripts/sync-lite-product-name.js && yarn run build:client:mac",
     "production:win": "yarn run bump-version-patch && yarn run bundle-lite-resources && yarn run build-server && yarn run build:client:win",
     "production:mac": "yarn run bump-version-patch && yarn run bundle-lite-resources && yarn run build-server && yarn run build:client:mac",
     "start:win": "yarn run build:win && cd client && yarn start",
