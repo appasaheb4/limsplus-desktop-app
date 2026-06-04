@@ -73,6 +73,12 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
   const steps = tab === 'backup' ? BACKUP_STEPS : RESTORE_STEPS;
   const currentStep = progress?.step ?? (busy ? 1 : 0);
   const percent = Math.min(100, Math.max(0, progress?.percent ?? 0));
+  const operationFinished =
+    !busy &&
+    (progress?.phase === 'done' ||
+      progress?.phase === 'error' ||
+      Boolean(successMessage) ||
+      Boolean(bannerError));
 
   useEffect(() => {
     if (!isOpen) {
@@ -149,6 +155,8 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
         )) as { ok: boolean; error?: string; outputDir?: string };
         if (!result.ok) {
           setBannerError(result.error ?? 'Backup failed.');
+          setBusy(false);
+          inFlight.current = false;
         }
       } else {
         const confirmed = window.confirm(
@@ -166,6 +174,8 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
         )) as { ok: boolean; error?: string };
         if (!result.ok) {
           setBannerError(result.error ?? 'Restore failed.');
+          setBusy(false);
+          inFlight.current = false;
         }
       }
     } catch (e: unknown) {
@@ -347,28 +357,31 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
         </div>
 
         <div className='flex flex-wrap gap-2 border-t border-white/10 px-5 py-4 sm:px-6'>
-          <button
-            type='button'
-            disabled={busy || !selectedPath}
-            className='flex-1 rounded-lg bg-[#00bcd4] py-2.5 text-sm font-semibold text-[#1a1a1a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
-            onClick={() => void runOperation()}
-          >
-            {busy
-              ? tab === 'backup'
-                ? 'Backing up…'
-                : 'Restoring…'
-              : tab === 'backup'
-                ? 'Start backup'
-                : 'Start restore'}
-          </button>
-          <button
-            type='button'
-            disabled={busy}
-            className='rounded-lg border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-medium text-white hover:bg-white/15 disabled:opacity-50'
-            onClick={onClose}
-          >
-            Close
-          </button>
+          {!operationFinished && (
+            <button
+              type='button'
+              disabled={busy || !selectedPath}
+              className='w-full rounded-lg bg-[#00bcd4] py-2.5 text-sm font-semibold text-[#1a1a1a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
+              onClick={() => void runOperation()}
+            >
+              {busy
+                ? tab === 'backup'
+                  ? 'Backing up…'
+                  : 'Restoring…'
+                : tab === 'backup'
+                  ? 'Start backup'
+                  : 'Start restore'}
+            </button>
+          )}
+          {operationFinished && (
+            <button
+              type='button'
+              className='w-full rounded-lg border border-white/15 bg-white/10 py-2.5 text-sm font-medium text-white hover:bg-white/15'
+              onClick={onClose}
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>
