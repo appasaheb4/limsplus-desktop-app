@@ -83,6 +83,19 @@ export default function ActivationKeyGate({ onActivated }: Props) {
         );
         const companyCode = extractLocalLoginCompanyCode(profile);
 
+        const savedProfile = (await ipcRenderer.invoke(
+          'save-activation-profile',
+          profile,
+        )) as { ok?: boolean };
+
+        if (!savedProfile?.ok) {
+          return {
+            ok: false,
+            message:
+              'Activation succeeded online but company profile could not be saved on this device.',
+          };
+        }
+
         const persisted = (await ipcRenderer.invoke(
           'persist-license-activation',
           { activationKey: trimmed, profile, localLoginCompany: companyCode },

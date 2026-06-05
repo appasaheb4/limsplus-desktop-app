@@ -1019,214 +1019,214 @@ async function prepareAndOpenLimsPlusLite(
       'Checking frontend (client/app/frontend) and Nest Lite API (backend: main.js or dist/main.js)...',
     );
 
-      const indexPath = getPortalBuildIndexPath();
-      const backendEntryPath = getLiteBackendEntryPath();
+    const indexPath = getPortalBuildIndexPath();
+    const backendEntryPath = getLiteBackendEntryPath();
 
-      if (isDev && !getLiteExternalMongoUriFromEnv()) {
-        console.info(
-          '[LimsPlus Lite] embedded Mongo:',
-          JSON.stringify(getLiteMongoPlatformSummary(), null, 0),
-        );
-      }
+    if (isDev && !getLiteExternalMongoUriFromEnv()) {
+      console.info(
+        '[LimsPlus Lite] embedded Mongo:',
+        JSON.stringify(getLiteMongoPlatformSummary(), null, 0),
+      );
+    }
 
-      if (!fs.existsSync(indexPath)) {
-        const msg = `Portal build not found:\n${indexPath}`;
-        emitError(msg);
-        return {
-          ok: false,
-          error: msg,
-          portalIndexPath: indexPath,
-        };
-      }
+    if (!fs.existsSync(indexPath)) {
+      const msg = `Portal build not found:\n${indexPath}`;
+      emitError(msg);
+      return {
+        ok: false,
+        error: msg,
+        portalIndexPath: indexPath,
+      };
+    }
 
-      if (!fs.existsSync(backendEntryPath)) {
-        const msg = `Nest Lite API not built (missing):\n${backendEntryPath}`;
-        emitError(msg);
-        return {
-          ok: false,
-          error: msg,
-          portalIndexPath: indexPath,
-          backendEntryPath,
-        };
-      }
+    if (!fs.existsSync(backendEntryPath)) {
+      const msg = `Nest Lite API not built (missing):\n${backendEntryPath}`;
+      emitError(msg);
+      return {
+        ok: false,
+        error: msg,
+        portalIndexPath: indexPath,
+        backendEntryPath,
+      };
+    }
 
-      warnIfPortalUsesExternalAssets(indexPath);
-      if (!app.isPackaged) {
-        console.info('[LimsPlus Lite] portal index:', indexPath);
-        console.info('[LimsPlus Lite] Nest API entry:', backendEntryPath);
-      }
+    warnIfPortalUsesExternalAssets(indexPath);
+    if (!app.isPackaged) {
+      console.info('[LimsPlus Lite] portal index:', indexPath);
+      console.info('[LimsPlus Lite] Nest API entry:', backendEntryPath);
+    }
 
-      const externalMongoUri = getLiteExternalMongoUriFromEnv();
-      if (externalMongoUri) {
-        emitPhase(
-          2,
-          `Using MongoDB from LIMSPLUS_LITE_EXTERNAL_MONGO_URI (${redactMongoUriForLogs(
-            externalMongoUri,
-          )}) — embedded MongoDB is skipped. Ensure mongod is running.`,
-        );
-      } else {
-        emitPhase(
-          2,
-          `Downloading or starting MongoDB (${LIMS_LITE_MONGO_LOOPBACK_BIND}, default tcp ${LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT} — stops other listeners on that port unless LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1; first launch may download server files)...`,
-        );
-      }
-
-      let mongoUri: string;
-      let liteMongoTcpPortForJson: number | null = null;
-      if (externalMongoUri) {
-        mongoUri = externalMongoUri;
-        liteMongoTcpPortForJson = mongoTcpListenPortHint(mongoUri);
-      } else {
-        const embedded = await ensureLiteMongoRunning();
-        mongoUri = embedded.mongoUri;
-        liteMongoTcpPortForJson = embedded.listenPort;
-      }
-
+    const externalMongoUri = getLiteExternalMongoUriFromEnv();
+    if (externalMongoUri) {
       emitPhase(
         2,
-        `Verifying MongoDB accepts connections (${redactMongoUriForLogs(mongoUri)})…`,
+        `Using MongoDB from LIMSPLUS_LITE_EXTERNAL_MONGO_URI (${redactMongoUriForLogs(
+          externalMongoUri,
+        )}) — embedded MongoDB is skipped. Ensure mongod is running.`,
       );
-      await waitUntilLiteMongoAcceptsConnections(mongoUri);
-      if (!app.isPackaged) {
-        console.info(
-          '[LimsPlus Lite] Mongo ready (ping ok):',
-          redactMongoUriForLogs(mongoUri),
-        );
-      }
-      const alreadyRestored = isFirstTimeSetup
-        ? false
-        : !!store.get('limsOfflineDbRestored');
-      if (isFirstTimeSetup) {
-        store.set('limsOfflineDbRestored', false);
-        emitPhase(
-          3,
-          'Dropping existing local MongoDB database and importing fresh bundled backup…',
-        );
-        try {
-          const dbNames = new Set<string>([DEFAULT_LITE_DB_NAME]);
-          const prior = readLiteBundledRestoreArtifactFingerprint();
-          if (prior?.lastDatabaseName) {
-            dbNames.add(prior.lastDatabaseName);
-          }
-          for (const dbName of dbNames) {
-            await dropLiteMongoDatabase(mongoUri, dbName);
-          }
-        } catch (dropErr: unknown) {
-          const errText =
-            dropErr instanceof Error ? dropErr.message : String(dropErr);
-          emitError(errText);
-          return { ok: false, error: errText };
-        }
-      } else {
-        emitPhase(
-          3,
-          'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
-        );
-      }
-      let restoreOutcome;
-      try {
-        restoreOutcome = await restoreFromBundledDumpIfNeeded(
-          mongoUri,
-          alreadyRestored,
-          { forceFreshImport: isFirstTimeSetup },
-        );
-      } catch (restoreErr: unknown) {
-        console.error(restoreErr);
-        const errText =
-          restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
-        emitError(errText);
-        return {
-          ok: false,
-          error: errText,
-        };
-      }
+    } else {
       emitPhase(
-        4,
-        'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
+        2,
+        `Downloading or starting MongoDB (${LIMS_LITE_MONGO_LOOPBACK_BIND}, default tcp ${LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT} — stops other listeners on that port unless LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1; first launch may download server files)...`,
       );
-      let liteApiBaseUrl: string;
-      let liteApiPort: number;
+    }
+
+    let mongoUri: string;
+    let liteMongoTcpPortForJson: number | null = null;
+    if (externalMongoUri) {
+      mongoUri = externalMongoUri;
+      liteMongoTcpPortForJson = mongoTcpListenPortHint(mongoUri);
+    } else {
+      const embedded = await ensureLiteMongoRunning();
+      mongoUri = embedded.mongoUri;
+      liteMongoTcpPortForJson = embedded.listenPort;
+    }
+
+    emitPhase(
+      2,
+      `Verifying MongoDB accepts connections (${redactMongoUriForLogs(mongoUri)})…`,
+    );
+    await waitUntilLiteMongoAcceptsConnections(mongoUri);
+    if (!app.isPackaged) {
+      console.info(
+        '[LimsPlus Lite] Mongo ready (ping ok):',
+        redactMongoUriForLogs(mongoUri),
+      );
+    }
+    const alreadyRestored = isFirstTimeSetup
+      ? false
+      : !!store.get('limsOfflineDbRestored');
+    if (isFirstTimeSetup) {
+      store.set('limsOfflineDbRestored', false);
+      emitPhase(
+        3,
+        'Dropping existing local MongoDB database and importing fresh bundled backup…',
+      );
       try {
-        const started = await startLiteNestBackend({
-          mongoUri,
-          databaseName: restoreOutcome.databaseName,
-        });
-        liteApiBaseUrl = started.apiBaseUrl;
-        liteApiPort = started.port;
-        if (!app.isPackaged) {
-          console.info('[LimsPlus Lite] Nest API listening:', liteApiBaseUrl);
+        const dbNames = new Set<string>([DEFAULT_LITE_DB_NAME]);
+        const prior = readLiteBundledRestoreArtifactFingerprint();
+        if (prior?.lastDatabaseName) {
+          dbNames.add(prior.lastDatabaseName);
         }
-      } catch (nestErr: unknown) {
-        console.error(nestErr);
+        for (const dbName of dbNames) {
+          await dropLiteMongoDatabase(mongoUri, dbName);
+        }
+      } catch (dropErr: unknown) {
         const errText =
-          nestErr instanceof Error ? nestErr.message : String(nestErr);
+          dropErr instanceof Error ? dropErr.message : String(dropErr);
         emitError(errText);
         return { ok: false, error: errText };
       }
-
+    } else {
       emitPhase(
-        5,
-        'Writing lims-lite-offline.json (Mongo + API URLs for tooling and the portal)...',
+        3,
+        'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
       );
-
-      fs.writeFileSync(
-        path.join(app.getPath('userData'), 'lims-lite-offline.json'),
-        JSON.stringify(
-          {
-            mongoUri,
-            database: restoreOutcome.databaseName,
-            bindIp: LIMS_LITE_MONGO_LOOPBACK_BIND,
-            liteMongoPort: liteMongoTcpPortForJson,
-            apiBaseUrl: liteApiBaseUrl,
-            liteApiPort,
-            localLoginCompany: companyCodeForLite,
-            networkScope: 'loopback-only-not-exposed-outside-this-machine',
-          },
-          null,
-          2,
-        ),
+    }
+    let restoreOutcome;
+    try {
+      restoreOutcome = await restoreFromBundledDumpIfNeeded(
+        mongoUri,
+        alreadyRestored,
+        { forceFreshImport: isFirstTimeSetup },
       );
-
-      limsPortalRuntimeConfig = {
-        localLoginCompany: companyCodeForLite,
-        apiBaseUrl: liteApiBaseUrl,
-      };
-
-      const portalRoot = path.dirname(indexPath);
-      try {
-        const nestGraphqlUrl = `${liteApiBaseUrl.replace(/\/$/, '')}/graphql`;
-        const baseUrl = await startLimsPortalStaticServer(
-          portalRoot,
-          nestGraphqlUrl,
-        );
-        const portalUrl = appendPortalLiteApiBaseQuery(
-          `${baseUrl}/`,
-          liteApiBaseUrl,
-          companyCodeForLite,
-        );
-        emitPhase(6, `Frontend static server ready — opening ${portalUrl}`);
-        await ensureLocalLimsPlusLiteWindowOpen(portalUrl, companyCodeForLite);
-      } catch (serveErr: unknown) {
-        stopLiteNestBackend();
-        const detail =
-          serveErr instanceof Error ? serveErr.message : String(serveErr);
-        const msg = `Failed to start Lite portal UI server:\n${detail}`;
-        emitError(msg);
-        return { ok: false, error: msg };
-      }
-
-      /** After first successful Lite prep, always use persisted embedded Mongo — not client/database/dump on every launch. */
-      store.set('limsOfflineDbRestored', true);
-      if (!silent) {
-        store.set('limsLiteSetupWizardComplete', true);
-      }
-
+    } catch (restoreErr: unknown) {
+      console.error(restoreErr);
+      const errText =
+        restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+      emitError(errText);
       return {
-        ok: true,
+        ok: false,
+        error: errText,
+      };
+    }
+    emitPhase(
+      4,
+      'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
+    );
+    let liteApiBaseUrl: string;
+    let liteApiPort: number;
+    try {
+      const started = await startLiteNestBackend({
         mongoUri,
         databaseName: restoreOutcome.databaseName,
-        firstRunRestore: restoreOutcome.didRestore,
-      };
+      });
+      liteApiBaseUrl = started.apiBaseUrl;
+      liteApiPort = started.port;
+      if (!app.isPackaged) {
+        console.info('[LimsPlus Lite] Nest API listening:', liteApiBaseUrl);
+      }
+    } catch (nestErr: unknown) {
+      console.error(nestErr);
+      const errText =
+        nestErr instanceof Error ? nestErr.message : String(nestErr);
+      emitError(errText);
+      return { ok: false, error: errText };
+    }
+
+    emitPhase(
+      5,
+      'Writing lims-lite-offline.json (Mongo + API URLs for tooling and the portal)...',
+    );
+
+    fs.writeFileSync(
+      path.join(app.getPath('userData'), 'lims-lite-offline.json'),
+      JSON.stringify(
+        {
+          mongoUri,
+          database: restoreOutcome.databaseName,
+          bindIp: LIMS_LITE_MONGO_LOOPBACK_BIND,
+          liteMongoPort: liteMongoTcpPortForJson,
+          apiBaseUrl: liteApiBaseUrl,
+          liteApiPort,
+          localLoginCompany: companyCodeForLite,
+          networkScope: 'loopback-only-not-exposed-outside-this-machine',
+        },
+        null,
+        2,
+      ),
+    );
+
+    limsPortalRuntimeConfig = {
+      localLoginCompany: companyCodeForLite,
+      apiBaseUrl: liteApiBaseUrl,
+    };
+
+    const portalRoot = path.dirname(indexPath);
+    try {
+      const nestGraphqlUrl = `${liteApiBaseUrl.replace(/\/$/, '')}/graphql`;
+      const baseUrl = await startLimsPortalStaticServer(
+        portalRoot,
+        nestGraphqlUrl,
+      );
+      const portalUrl = appendPortalLiteApiBaseQuery(
+        `${baseUrl}/`,
+        liteApiBaseUrl,
+        companyCodeForLite,
+      );
+      emitPhase(6, `Frontend static server ready — opening ${portalUrl}`);
+      await ensureLocalLimsPlusLiteWindowOpen(portalUrl, companyCodeForLite);
+    } catch (serveErr: unknown) {
+      stopLiteNestBackend();
+      const detail =
+        serveErr instanceof Error ? serveErr.message : String(serveErr);
+      const msg = `Failed to start Lite portal UI server:\n${detail}`;
+      emitError(msg);
+      return { ok: false, error: msg };
+    }
+
+    /** After first successful Lite prep, always use persisted embedded Mongo — not client/database/dump on every launch. */
+    store.set('limsOfflineDbRestored', true);
+    if (!silent) {
+      store.set('limsLiteSetupWizardComplete', true);
+    }
+
+    return {
+      ok: true,
+      mongoUri,
+      databaseName: restoreOutcome.databaseName,
+      firstRunRestore: restoreOutcome.didRestore,
+    };
   } catch (e: unknown) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);
@@ -1249,8 +1249,10 @@ ipcMain.handle(
 );
 
 /** Repeat opens: start stack + portal without the first-time setup modal. */
-ipcMain.handle('open-limsplus-lite', async (event, payload?: PrepareLimsLitePayload) =>
-  prepareAndOpenLimsPlusLite(event.sender, { ...payload, silent: true }),
+ipcMain.handle(
+  'open-limsplus-lite',
+  async (event, payload?: PrepareLimsLitePayload) =>
+    prepareAndOpenLimsPlusLite(event.sender, { ...payload, silent: true }),
 );
 
 app.on('before-quit', async (event) => {
@@ -1443,8 +1445,7 @@ ipcMain.handle(
         ? payload.profile
         : null;
     if (profile && typeof profile === 'object') {
-      store.set('activationProfile', profile);
-      broadcastActivationProfileUpdated(event.sender, profile);
+      saveActivationProfileToStore(event.sender, profile);
     }
 
     let companyCode = '';
@@ -1498,10 +1499,21 @@ function broadcastActivationProfileUpdated(
   }
 }
 
-ipcMain.handle('save-activation-profile', (event, profile: unknown) => {
-  const value = profile && typeof profile === 'object' ? profile : null;
+function saveActivationProfileToStore(
+  sender: WebContents,
+  profile: unknown,
+): Record<string, unknown> | null {
+  const value =
+    profile && typeof profile === 'object' && !Array.isArray(profile)
+      ? (profile as Record<string, unknown>)
+      : null;
   store.set('activationProfile', value);
-  broadcastActivationProfileUpdated(event.sender, value);
+  broadcastActivationProfileUpdated(sender, value);
+  return value;
+}
+
+ipcMain.handle('save-activation-profile', (event, profile: unknown) => {
+  saveActivationProfileToStore(event.sender, profile);
   return { ok: true };
 });
 

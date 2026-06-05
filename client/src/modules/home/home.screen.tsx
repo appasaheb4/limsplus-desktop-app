@@ -16,6 +16,7 @@ import {
   refreshLocalLoginCompanyFromStore,
   setLocalLoginCompanyCode,
 } from '../../runtime/local-login-company';
+import { service } from '../../core-services/rest-api';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -329,14 +330,41 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
   const handleSignOut = async () => {
     try {
       setLocalLoginCompanyCode(null);
-      await ipcRenderer.invoke('clear-license-activation');
-
+     
       const userDataPath = await ipcRenderer.invoke('get-user-data-path');
       const filePath = `${userDataPath}/user-preferences.json`;
       const fileExists = await ipcRenderer.invoke('check-file-exists', filePath);
-
       if (fileExists) {
         await ipcRenderer.invoke('remove-file', filePath);
+      }
+      // cloud side remove the activation profile
+      const storedProfile = (await ipcRenderer.invoke(
+        'get-activation-profile',
+      )) as DesktopActivationProfile | null;
+
+      const profile = hasActivationProfileContent(storedProfile)
+        ? storedProfile
+        : hasActivationProfileContent(activationProfile)
+          ? activationProfile
+          : null;
+      if (profile) {
+        const result = (await service
+          .post('/company/logoutDesktopApp', {
+            filter: {
+              code: profile.code
+            },
+          })
+          .then((response) => response.data)) as {
+          success?: boolean;
+          message?: string;
+          company?: Record<string, unknown>;
+        };
+        if (result.success) {
+          await ipcRenderer.invoke('clear-license-activation');
+        }
+        else {
+          alert(result.message);
+        }
       }
     } catch {
       alert('Something went wrong while signing out. Please try again.');
