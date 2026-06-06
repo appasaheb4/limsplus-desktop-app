@@ -2,6 +2,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
+import { EJSON } from 'bson';
 import { BSON, MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { resolveExclusiveLoopbackTcpPort } from './exclusiveLoopbackTcpPort';
@@ -453,6 +454,171 @@ function collectionNameFromMongoDumpPath(
   return rel.replace(/\.(bson\.gz|bson)$/i, '').split('/').join('.');
 }
 
+type MongodumpMetadataFile = {
+  collectionName?: string;
+  type?: string;
+  options?: {
+    viewOn?: string;
+    pipeline?: unknown[];
+  };
+};
+
+function recursivelyCollectMetadataJsonFiles(absDirRoot: string): string[] {
+  const out: string[] = [];
+
+  function walk(abs: string): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(abs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const pAbs = path.join(abs, e.name);
+      if (e.isDirectory()) {
+        walk(pAbs);
+      } else if (e.name.endsWith('.metadata.json')) {
+        out.push(pAbs);
+      }
+    }
+  }
+
+  walk(absDirRoot);
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * BSON import skips `*.metadata.json` views (e.g. `delivery_queue_deduped` on `patientReports`).
+ * Delivery-queue reads that view — recreate it after every restore (Mac + Windows).
+ */
+async function restoreMongoViewsFromDumpMetadata(
+  db: import('mongodb').Db,
+  dumpFolder: string,
+): Promise<string[]> {
+  const dumpRootResolved = path.resolve(dumpFolder);
+  const metadataPaths = recursivelyCollectMetadataJsonFiles(dumpRootResolved);
+  const viewsCreated: string[] = [];
+
+  for (const metaPath of metadataPaths) {
+    let meta: MongodumpMetadataFile;
+    try {
+      meta = EJSON.parse(
+        fs.readFileSync(metaPath, 'utf8'),
+      ) as MongodumpMetadataFile;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        '[LimsPlus Lite] Skipping unreadable view metadata:',
+        metaPath,
+        msg,
+      );
+      continue;
+    }
+
+    if (meta.type !== 'view') continue;
+
+    const viewName = meta.collectionName?.trim();
+    const viewOn = meta.options?.viewOn?.trim();
+    const pipeline = meta.options?.pipeline;
+    if (
+      !viewName ||
+      !viewOn ||
+      !Array.isArray(pipeline) ||
+      pipeline.length === 0
+    ) {
+      console.warn(
+        '[LimsPlus Lite] Skipping incomplete view metadata:',
+        metaPath,
+      );
+      continue;
+    }
+
+    try {
+      const existing = await db
+        .listCollections({ name: viewName }, { nameOnly: true })
+        .toArray();
+      if (existing.length > 0) {
+        await db.collection(viewName).drop().catch(() => undefined);
+      }
+      await db.createCollection(viewName, {
+        viewOn,
+        pipeline: pipeline as import('mongodb').Document[],
+      });
+      viewsCreated.push(viewName);
+      console.info(
+        `[LimsPlus Lite] MongoDB view created: ${viewName} → ${viewOn}`,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[LimsPlus Lite] Failed to create MongoDB view "${viewName}" from ${metaPath}: ${msg}`,
+      );
+    }
+  }
+
+  return viewsCreated;
+}
+
+/** Ensures mongodump views exist when BSON import was skipped (e.g. prior Windows seed without views). */
+async function ensureBundledMongoViews(
+  mongoUri: string,
+  databaseName: string,
+  options: { folderPath?: string; zipPath?: string },
+): Promise<void> {
+  let metadataRoot: string | null = null;
+  if (options.folderPath && fs.existsSync(options.folderPath)) {
+    metadataRoot =
+      findFirstBsonHierarchyRoot(options.folderPath) ?? options.folderPath;
+  } else if (options.zipPath && fs.existsSync(options.zipPath)) {
+    metadataRoot = resolveDatabaseDumpFolder({
+      zipPath: options.zipPath,
+      folderPath: null,
+    });
+  }
+  if (!metadataRoot) return;
+
+  const client = new MongoClient(mongoUri);
+  await client.connect();
+  try {
+    const db = client.db(databaseName);
+    await restoreMongoViewsFromDumpMetadata(db, metadataRoot);
+    await logDeliveryQueueRestoreDiagnostics(db);
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+async function logDeliveryQueueRestoreDiagnostics(
+  db: import('mongodb').Db,
+): Promise<void> {
+  try {
+    const deliveryQueueDocs = await db
+      .collection('patientReports')
+      .countDocuments({ documentType: 'deliveryQueue' });
+    let viewRows: number | null = null;
+    const viewExists =
+      (
+        await db
+          .listCollections({ name: 'delivery_queue_deduped' }, { nameOnly: true })
+          .toArray()
+      ).length > 0;
+    if (viewExists) {
+      viewRows = await db.collection('delivery_queue_deduped').countDocuments();
+    }
+    console.info('[LimsPlus Lite] delivery-queue seed check:', {
+      patientReportsDeliveryQueue: deliveryQueueDocs,
+      deliveryQueueDedupedViewExists: viewExists,
+      deliveryQueueDedupedViewRows: viewRows,
+    });
+  } catch (err: unknown) {
+    console.warn(
+      '[LimsPlus Lite] delivery-queue diagnostics skipped:',
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 function recursivelyCollectMongoDumpLeafBson(absDirRoot: string): string[] {
   const out: string[] = [];
 
@@ -711,11 +877,18 @@ export async function restoreLiteDatabaseDump(
       );
     }
 
+    const viewsCreated = await restoreMongoViewsFromDumpMetadata(
+      db,
+      dumpRootResolved,
+    );
+    await logDeliveryQueueRestoreDiagnostics(db);
+
     console.info('[LimsPlus Lite] mongorestore-directory import:', {
       databaseName: dbName,
       bsonLeafFiles: bsonPaths.length,
       documentsInserted,
       collectionsPopulation: collectionsWithDocs.size,
+      viewsCreated,
     });
     return {
       documentsInserted,
@@ -962,10 +1135,15 @@ export async function restoreFromBundledDumpIfNeeded(
         );
       }
     }
+    const databaseName =
+      priorFingerprint?.lastDatabaseName ?? DEFAULT_LITE_DB_NAME;
+    await ensureBundledMongoViews(mongoUri, databaseName, {
+      folderPath,
+      zipPath: zipPath ?? undefined,
+    });
     return {
       didRestore: false,
-      databaseName:
-        priorFingerprint?.lastDatabaseName ?? DEFAULT_LITE_DB_NAME,
+      databaseName,
     };
   }
 

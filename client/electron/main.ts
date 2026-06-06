@@ -46,6 +46,7 @@ import {
   migrateLegacyPlaintextFlag,
   persistSecureActivationRecord,
 } from './licenseSecureStorage';
+import { ensureFreshInstallOnPackagedStartup } from './freshInstallPurge';
 import installExtension, {
   REACT_DEVELOPER_TOOLS,
 } from 'electron-devtools-installer';
@@ -542,6 +543,9 @@ let isLiteMongoQuitHandling = false;
 
 const isDev = !app.isPackaged;
 process.env.NODE_ENV = 'production';
+
+/** Wipe caches / Mongo / prefs before Store reads userData (packaged installs only). */
+ensureFreshInstallOnPackagedStartup();
 
 /** Packaged name from electron-builder `productName` (e.g. LIMSPLUS Lite 1.0.10). */
 function getPackagedAppDisplayName(): string {

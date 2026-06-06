@@ -1,0 +1,14 @@
+#!/bin/bash
+# Launch the app for the logged-in console user after PKG install completes.
+set -e
+
+APP_BUNDLE_ID="com.limsplus.connect"
+CONSOLE_USER="$(stat -f%Su /dev/console 2>/dev/null || true)"
+
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  sudo -u "$CONSOLE_USER" open -b "$APP_BUNDLE_ID" >/dev/null 2>&1 || true
+else
+  open -b "$APP_BUNDLE_ID" >/dev/null 2>&1 || true
+fi
+
+exit 0
