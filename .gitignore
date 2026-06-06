@@ -9,3 +9,4 @@
 /server/build
 /server/server.spec
 /server/__pycache__
+/client/database/dump/*
