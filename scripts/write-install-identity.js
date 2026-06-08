@@ -13,7 +13,9 @@ function main() {
   const clientPkg = JSON.parse(fs.readFileSync(clientPkgPath, 'utf8'));
   const build = clientPkg.build || {};
   const version = String(clientPkg.version || '0.0.0').trim();
-  const productName = String(build.productName || `LIMSPLUS Lite ${version}`).trim();
+  const productName = String(
+    build.productName || `LIMSPLUS Connect ${version}`,
+  ).trim();
   const appId = String(build.appId || 'com.limsplus.connect').trim();
 
   const identity = {

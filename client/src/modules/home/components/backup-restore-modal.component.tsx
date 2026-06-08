@@ -195,7 +195,20 @@ export default function BackupRestoreModal({ isOpen, onClose }: Props) {
       aria-labelledby='backup-restore-title'
     >
       <div className='flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl'>
-        <div className='border-b border-white/10 px-5 py-4 sm:px-6'>
+        <div className='relative border-b border-white/10 px-5 py-4 pr-14 sm:px-6 sm:pr-16'>
+          <button
+            type='button'
+            aria-label='Close'
+            disabled={busy}
+            onClick={onClose}
+            className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg border text-xl leading-none transition sm:right-4 sm:top-4 ${
+              busy
+                ? 'cursor-not-allowed border-white/10 bg-white/5 text-gray-600 opacity-70'
+                : 'border-white/25 bg-white/10 text-white shadow-sm hover:border-white/40 hover:bg-white/20'
+            }`}
+          >
+            ×
+          </button>
           <h2
             id='backup-restore-title'
             className='text-lg font-semibold text-white'

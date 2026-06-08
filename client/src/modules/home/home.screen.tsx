@@ -520,7 +520,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
       <header className='header justify-between w-full'>
         <div className='flex items-center gap-3'>
           <span className='text-lg font-semibold tracking-tight text-white'>
-            LIMS<span className='text-[#00bcd4]'>Plus</span> Desktop
+            LIMS<span className='text-[#00bcd4]'>PLUS</span> Connect
           </span>
           <span className='hidden sm:inline text-xs font-normal text-gray-500 border-l border-gray-600 pl-3'>
             Connector dashboard

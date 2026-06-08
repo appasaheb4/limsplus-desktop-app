@@ -9,6 +9,8 @@
   RMDir /r "$LOCALAPPDATA\limsplus-connect"
   RMDir /r "$APPDATA\LimsPlus Connect"
   RMDir /r "$LOCALAPPDATA\LimsPlus Connect"
+  RMDir /r "$APPDATA\LIMSPLUS Connect"
+  RMDir /r "$LOCALAPPDATA\LIMSPLUS Connect"
 !macroend
 
 !macro customUnInstall
@@ -19,4 +21,6 @@
   RMDir /r "$LOCALAPPDATA\limsplus-connect"
   RMDir /r "$APPDATA\LimsPlus Connect"
   RMDir /r "$LOCALAPPDATA\LimsPlus Connect"
+  RMDir /r "$APPDATA\LIMSPLUS Connect"
+  RMDir /r "$LOCALAPPDATA\LIMSPLUS Connect"
 !macroend

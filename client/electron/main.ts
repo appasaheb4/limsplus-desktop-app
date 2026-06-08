@@ -7,6 +7,7 @@ import {
   WebContents,
   session,
   dialog,
+  screen,
 } from 'electron';
 import * as http from 'http';
 import * as https from 'https';
@@ -544,13 +545,19 @@ let isLiteMongoQuitHandling = false;
 const isDev = !app.isPackaged;
 process.env.NODE_ENV = 'production';
 
+/** Windows taskbar icon + restore after minimize (must match electron-builder `appId`). */
+const LIMSPLUS_CONNECT_APP_ID = 'com.limsplus.connect';
+if (process.platform === 'win32') {
+  app.setAppUserModelId(LIMSPLUS_CONNECT_APP_ID);
+}
+
 /** Wipe caches / Mongo / prefs before Store reads userData (packaged installs only). */
 ensureFreshInstallOnPackagedStartup();
 
-/** Packaged name from electron-builder `productName` (e.g. LIMSPLUS Lite 1.0.10). */
+/** Packaged name from electron-builder `productName` (e.g. LIMSPLUS Connect 1.0.17). */
 function getPackagedAppDisplayName(): string {
   const name = app.getName()?.trim();
-  return name || `LIMSPLUS Lite ${app.getVersion()}`;
+  return name || `LIMSPLUS Connect ${app.getVersion()}`;
 }
 
 /** Connector React dev server (CRA), default port 3000. Override with `LIMSPLUS_CONNECT_DEV_URL`. */
@@ -585,14 +592,144 @@ const instrumentLogStore = new InstrumentLogsStore({
   configName: 'instrument-logs',
 });
 
+/** Same monitor as the Connect dashboard — user can drag to another display later. */
+function getDisplayForMainWindow(): Electron.Display {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const bounds = mainWindow.getBounds();
+    return screen.getDisplayNearestPoint({
+      x: bounds.x + Math.floor(bounds.width / 2),
+      y: bounds.y + Math.floor(bounds.height / 2),
+    });
+  }
+  return screen.getPrimaryDisplay();
+}
+
+function getIntegrationGatewayWindowBounds(): Electron.Rectangle {
+  const area = getDisplayForMainWindow().workArea;
+  const width = Math.min(1024, Math.max(960, area.width - 48));
+  const height = Math.min(768, Math.max(640, area.height - 48));
+  return {
+    x: area.x + Math.floor((area.width - width) / 2),
+    y: area.y + Math.floor((area.height - height) / 2),
+    width,
+    height,
+  };
+}
+
+function startIntegrationGatewayPythonServer(): void {
+  if (serverProcess) return;
+
+  if (isDev) {
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const serverScript = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'server',
+      'main.py',
+    );
+    serverProcess = spawn(pythonCmd, [serverScript], { stdio: 'inherit' });
+  } else {
+    const serverPath = path.join(
+      process.resourcesPath,
+      'server',
+      process.platform === 'win32' ? 'server.exe' : 'server',
+    );
+    serverProcess = spawn(serverPath, [], { stdio: 'inherit' });
+  }
+
+  serverProcess.on('error', (err: string) => {
+    console.error('Failed to start Python server:', err);
+  });
+
+  serverProcess.on('exit', (code: string) => {
+    console.log(`Python server exited with code ${code}`);
+    serverProcess = null;
+  });
+}
+
+function openIntegrationGatewayWindow(route: string): void {
+  if (childWindows && !childWindows.isDestroyed()) {
+    childWindows.show();
+    childWindows.focus();
+    return;
+  }
+
+  const bounds = getIntegrationGatewayWindowBounds();
+
+  childWindows = new BrowserWindow({
+    ...bounds,
+    minWidth: 960,
+    minHeight: 640,
+    title: `Integration Gateway — ${getPackagedAppDisplayName()}`,
+    icon: path.join(__dirname, '../assets/icon.ico'),
+    skipTaskbar: process.platform !== 'win32',
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
+    autoHideMenuBar: true,
+    show: false,
+    /** Independent top-level window — draggable across monitors (no parent / always-on-top). */
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  childWindows.setMenu(null);
+  childWindows.setMenuBarVisibility(false);
+
+  const user = store.get('user');
+  if (user?.userId) {
+    childWindows.webContents.on('did-finish-load', () => {
+      childWindows.webContents.send('user', user);
+    });
+  }
+
+  if (isDev) {
+    if (shouldAutoOpenElectronDevTools()) {
+      childWindows.webContents.openDevTools();
+    }
+    childWindows.loadURL(`${getConnectorDevUrl()}#${route}`);
+  } else {
+    childWindows.loadFile(path.join(__dirname, '../index.html'), {
+      hash: route,
+    });
+  }
+
+  childWindows.once('ready-to-show', () => {
+    /** Full screen on the same display as Connect (original behavior). */
+    childWindows.maximize();
+    childWindows.show();
+    childWindows.focus();
+  });
+
+  startIntegrationGatewayPythonServer();
+
+  childWindows.on('closed', () => {
+    if (serverProcess) {
+      serverProcess.kill();
+      serverProcess = null;
+      console.info(
+        'Python server stopped because the integration-gateway screen was closed.',
+      );
+    }
+    childWindows = null;
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: isDev ? 1424 : 1024,
     height: 768,
-    title: isDev ? 'LimsPlus Connect' : getPackagedAppDisplayName(),
+    title: isDev
+      ? `LIMSPLUS Connect ${app.getVersion()}`
+      : getPackagedAppDisplayName(),
     resizable: false,
     icon: path.join(__dirname, '../assets/icon.ico'),
-    skipTaskbar: true,
+    /** Windows: must stay in taskbar so users can restore after minimize. */
+    skipTaskbar: process.platform !== 'win32',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true,
@@ -698,70 +835,10 @@ app.whenReady().then(() => {
   });
 });
 
-ipcMain.on('navigate-to-integration-gateway', (event, route) => {
-  childWindows = new BrowserWindow({
-    parent: mainWindow,
-    alwaysOnTop: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
-  });
-  if (isDev) {
-    if (shouldAutoOpenElectronDevTools()) {
-      childWindows.webContents.openDevTools();
-    }
-    childWindows.loadURL(`${getConnectorDevUrl()}#${route}`);
-  } else {
-    childWindows.loadFile(path.join(__dirname, '../index.html'), {
-      hash: route,
-    });
-  }
-  childWindows.once('ready-to-show', () => {
-    childWindows.maximize();
-    childWindows.show();
-  });
-
-  // Start the Python server
-  if (isDev) {
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-    const serverScript = path.resolve(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      'server',
-      'main.py',
-    );
-    serverProcess = spawn(pythonCmd, [serverScript], { stdio: 'inherit' });
-  } else {
-    const serverPath = path.join(
-      process.resourcesPath,
-      'server',
-      process.platform === 'win32' ? 'server.exe' : 'server',
-    );
-    serverProcess = spawn(serverPath, [], { stdio: 'inherit' });
-  }
-
-  serverProcess.on('error', (err: string) => {
-    console.error('Failed to start Python server:', err);
-  });
-
-  serverProcess.on('exit', (code: string) => {
-    console.log(`Python server exited with code ${code}`);
-  });
-
-  childWindows.on('closed', () => {
-    if (serverProcess) {
-      serverProcess.kill();
-      serverProcess = null;
-      console.log(
-        'Python server stopped because the integration-gateway screen was closed.',
-      );
-    }
-    childWindows = null;
-  });
+ipcMain.on('navigate-to-integration-gateway', (_event, route) => {
+  openIntegrationGatewayWindow(
+    typeof route === 'string' && route.trim() ? route : '/integration-gateway',
+  );
 });
 
 ipcMain.on('navigate-to-iframe-screen', (event, url, title) => {
@@ -868,7 +945,9 @@ async function ensureLocalLimsPlusLiteWindowOpen(
 
   limsPlusLiteWindow = new BrowserWindow({
     show: false,
-    title: isDev ? 'LimsPlus Lite' : getPackagedAppDisplayName(),
+    title: 'LIMSPLUS Lite',
+    icon: path.join(__dirname, '../assets/icon.ico'),
+    skipTaskbar: process.platform !== 'win32',
     backgroundColor: '#1a1a1a',
     autoHideMenuBar: true,
     webPreferences: {

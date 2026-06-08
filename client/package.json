@@ -1,6 +1,6 @@
 {
   "name": "limsplus-connect",
-  "version": "1.0.16",
+  "version": "1.0.18",
   "author": "Lakade Appasaheb",
   "description": "LimsPlus Connect",
   "homepage": ".",
@@ -63,7 +63,7 @@
   },
   "build": {
     "appId": "com.limsplus.connect",
-    "productName": "LIMSPLUS Lite 1.0.16",
+    "productName": "LIMSPLUS Connect 1.0.18",
     "copyright": "Copyright © 2026 LimsPlus",
     "publish": null,
     "extends": null,
@@ -147,7 +147,7 @@
       ],
       "icon": "assets/icon.ico",
       "artifactName": "${productName} Setup.${ext}",
-      "requestedExecutionLevel": "requireAdministrator",
+      "requestedExecutionLevel": "asInvoker",
       "legalTrademarks": "(c) 2024 https://www.limsplus.co.in",
       "publisherName": "LimsPlus"
     },
@@ -158,7 +158,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LIMSPLUS Lite 1.0.16",
+      "shortcutName": "LIMSPLUS Connect 1.0.18",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "runAfterFinish": true,
@@ -166,7 +166,7 @@
       "include": "installer/nsis/installer.nsh"
     },
     "dmg": {
-      "title": "LIMSPLUS Lite 1.0.16",
+      "title": "LIMSPLUS Connect 1.0.18",
       "icon": "assets/icon.icns",
       "artifactName": "${productName}.${ext}",
       "contents": [

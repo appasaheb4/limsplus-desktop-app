@@ -2,7 +2,7 @@
  * Removes local license activation so the activation key screen shows again.
  *
  * Dev (`yarn electron:dev`) uses package name → "limsplus-connect".
- * Packaged app uses productName → "LimsPlus Connect".
+ * Packaged app uses productName → "LIMSPLUS Connect".
  */
 const fs = require('fs');
 const os = require('os');
@@ -23,7 +23,7 @@ function appSupportDir(folderName) {
   return path.join(os.homedir(), '.config', folderName);
 }
 
-const folders = ['limsplus-connect', 'LimsPlus Connect'];
+const folders = ['limsplus-connect', 'LimsPlus Connect', 'LIMSPLUS Connect'];
 let removed = 0;
 
 for (const folder of folders) {

@@ -12,7 +12,7 @@ import { stores } from './stores';
 import { useCallback, useEffect, useState } from 'react';
 import type { DesktopActivationProfile } from './modules/license-activation/desktop-activation-profile.types';
 import {
-  activationProfileLabel,
+  // activationProfileLabel,
   extractLocalLoginCompanyCode,
   hasActivationProfileContent,
 } from './modules/license-activation/desktop-activation-profile.types';
@@ -28,13 +28,12 @@ type DashboardWithWelcomeProps = {
 };
 
 function DashboardWithWelcome({ activationProfile }: DashboardWithWelcomeProps) {
-  const companyName = activationProfileLabel(activationProfile);
-
+  //const companyName = activationProfileLabel(activationProfile);
   return (
     <div className='flex min-h-screen w-full flex-col'>
-      <header className='w-full border-b border-neutral-200 bg-neutral-100 px-4 py-3 text-base font-semibold text-neutral-900'>
+      {/* <header className='w-full border-b border-neutral-200 bg-neutral-100 px-4 py-3 text-base font-semibold text-neutral-900'>
         {companyName ? `Welcome ${companyName}` : 'Welcome'}
-      </header>
+      </header> */}
       <Home activationProfile={activationProfile} />
     </div>
   );

@@ -3,8 +3,17 @@ import _ from 'lodash';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
+import '../home/style.css';
 
 const { ipcRenderer } = window.require('electron');
+
+const IG_FIELD_LABEL =
+  'mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500';
+const IG_FIELD_CONTROL =
+  'w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#00bcd4]/50 focus:ring-2 focus:ring-[#00bcd4]/20 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-gray-500';
+const IG_PANEL = 'rounded-xl border border-white/10 bg-[#2a2a2a] shadow-lg';
+const IG_TABLE_CELL =
+  'border-b border-white/10 px-4 py-3 text-sm text-gray-200';
 
 type User = {
   userId: string;
@@ -83,12 +92,31 @@ const IntegrationGateway = observer(() => {
     }
   }
 
+  const statusBadgeClass = (status: string): string => {
+    const normalized = status.toLowerCase();
+    const base =
+      'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ';
+    if (normalized.includes('error')) {
+      return `${base}bg-rose-900/40 text-rose-200`;
+    }
+    if (normalized.includes('disconnect')) {
+      return `${base}bg-white/10 text-gray-400`;
+    }
+    if (
+      normalized === 'connected' ||
+      (normalized.includes('connected') && !normalized.includes('connecting'))
+    ) {
+      return `${base}bg-emerald-900/40 text-emerald-200`;
+    }
+    return `${base}bg-amber-900/40 text-amber-200`;
+  };
+
   const updateRowStatus = (status: string) => {
     const statusCell = document.getElementById(
       `status-${inputs.ip}-${inputs.port}`,
     );
     if (statusCell) {
-      statusCell.textContent = status;
+      statusCell.innerHTML = `<span class="${statusBadgeClass(status)}">${status}</span>`;
     } else {
       console.error('Status cell not found for the given IP and Port');
     }
@@ -255,22 +283,21 @@ const IntegrationGateway = observer(() => {
       const currentTime = now.toLocaleTimeString();
 
       newRow.innerHTML = `
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs?.ip}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.port}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.companyCode}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.environment}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instType}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white">${inputs.instId}</td>
-        <td class="px-4 py-2 border border-gray-300 text-white" id="status-${inputs.ip}-${inputs.port}">Connecting...</td>
-        <td class="px-4 py-2 border border-gray-300 text-white text-center">
-          <i
-          class="fas fa-expand text-blue-500 cursor-pointer"
-          id="toggleModalIcon"
-          ></i>
+        <td class="${IG_TABLE_CELL} font-mono text-[#80deea]">${inputs?.ip}</td>
+        <td class="${IG_TABLE_CELL} font-mono">${inputs.port}</td>
+        <td class="${IG_TABLE_CELL}">${inputs.companyCode}</td>
+        <td class="${IG_TABLE_CELL}">${inputs.environment}</td>
+        <td class="${IG_TABLE_CELL}">${inputs.instType}</td>
+        <td class="${IG_TABLE_CELL}">${inputs.instId}</td>
+        <td class="${IG_TABLE_CELL}" id="status-${inputs.ip}-${inputs.port}">
+          <span class="inline-flex rounded-full bg-amber-900/40 px-2.5 py-0.5 text-xs font-medium text-amber-200">Connecting…</span>
         </td>
-        <td class="px-4 py-2 border border-gray-300 text-white text-center">
-          ${currentTime}
+        <td class="${IG_TABLE_CELL} text-center">
+          <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#00bcd4]/30 bg-[#00bcd4]/10 text-[#00bcd4] transition hover:bg-[#00bcd4]/20" aria-label="View message">
+            <i class="fas fa-expand text-sm" id="toggleModalIcon"></i>
+          </button>
         </td>
+        <td class="${IG_TABLE_CELL} text-center tabular-nums text-gray-400">${currentTime}</td>
       `;
 
       const toggleModalIcon = newRow.querySelector('#toggleModalIcon');
@@ -295,65 +322,76 @@ const IntegrationGateway = observer(() => {
   };
 
   return (
-    <div className='flex p-2 w-full h-screen  items-center justify-center bg-gradient-to-r from-purple-600 to-blue-500'>
-      <title id='title'>LimsPlus Connect</title>
-      <div className='shadow-lg rounded-lg p-6 w-full h-full max-w-full flex flex-col text-white'>
-        <div className='grid grid-cols-12 gap-6'>
-          <div className='col-span-2 p-6 border rounded-lg shadow-sm bg-[#2a2a2a]'>
-            <div>
-              <div className='mb-4'>
-                <label className='flex items-center space-x-2 text-sm font-medium'>
-                  <input
-                    type='radio'
-                    name='type'
-                    id='tcpip'
-                    checked
-                    className='border-gray-300 focus:ring-2 focus:ring-blue-500'
-                  />
-                  <span>TCP/IP</span>
-                </label>
+    <div className='flex min-h-screen w-full flex-col bg-[#1a1a1a] text-gray-100'>
+      <header className='header justify-between w-full'>
+        <div className='flex items-center gap-3'>
+          <span className='text-lg font-semibold tracking-tight text-white'>
+            LIMS<span className='text-[#00bcd4]'>PLUS</span> Connect
+          </span>
+          <span className='hidden border-l border-gray-600 pl-3 text-xs font-normal text-gray-500 sm:inline'>
+            Integration Gateway
+          </span>
+        </div>
+      </header>
+      <div className='flex min-h-0 flex-1 flex-col overflow-auto bg-[#1a1a1a] p-4 sm:p-6'>
+        <div className='mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6'>
+          <div className='grid grid-cols-1 gap-6 lg:grid-cols-12'>
+            <aside className={`${IG_PANEL} flex flex-col gap-6 p-5 lg:col-span-3`}>
+              <div>
+                <p className={IG_FIELD_LABEL}>Connection type</p>
+                <div className='mt-2 space-y-2'>
+                  <label className='flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-gray-200 transition hover:border-[#00bcd4]/30'>
+                    <input
+                      type='radio'
+                      name='type'
+                      id='tcpip'
+                      defaultChecked
+                      className='h-4 w-4 accent-[#00bcd4]'
+                    />
+                    <span>TCP/IP</span>
+                  </label>
+                  <label className='flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-gray-200 transition hover:border-white/20'>
+                    <input
+                      type='radio'
+                      name='type'
+                      id='serial'
+                      className='h-4 w-4 accent-[#00bcd4]'
+                    />
+                    <span>Serial</span>
+                  </label>
+                </div>
               </div>
-              <div className='mb-4'>
-                <label className='flex items-center space-x-2 text-sm font-medium'>
-                  <input
-                    type='radio'
-                    name='type'
-                    id='serial'
-                    className='border-gray-300 focus:ring-2 focus:ring-blue-500'
-                  />
-                  <span>Serial</span>
-                </label>
+
+              <div>
+                <p className={IG_FIELD_LABEL}>Mode</p>
+                <div className='mt-2 flex flex-col gap-2'>
+                  <button
+                    id='btn-lis1a'
+                    type='button'
+                    className='rounded-lg bg-[#00bcd4] px-4 py-3 text-sm font-semibold text-[#1a1a1a] shadow transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00bcd4]'
+                  >
+                    Instrument
+                  </button>
+                  <button
+                    id='btn-manual'
+                    type='button'
+                    className='rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-gray-300 transition hover:border-white/25 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30'
+                  >
+                    Manual
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className='space-y-2 flex flex-col w-30'>
-              <button
-                id='btn-lis1a'
-                className='w-30 text-sm px-4 bg-yellow-500 py-3 text-black rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition'
-              >
-                INSTRUMENT
-              </button>
-              <button
-                id='btn-manual'
-                className='w-30 text-sm px-4 py-3 bg-gray-500 text-gray-700 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 transition'
-              >
-                MANUAL
-              </button>
-            </div>
-
-            <div className='mt-6'>
-              <label
-                htmlFor='logFileInput'
-                className='block text-sm font-medium mb-2'
-              >
-                Upload Log:
-              </label>
-              <div className='relative'>
+              <div>
+                <label htmlFor='logFileInput' className={IG_FIELD_LABEL}>
+                  Upload log
+                </label>
                 <label
-                  className='flex items-center justify-center w-30 border-2 border-dashed border-gray-300 hover:border-blue-800 rounded-md px-3 py-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
                   htmlFor='logFileInput'
+                  className='mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-gray-400 transition hover:border-[#00bcd4]/40 hover:bg-[#00bcd4]/5 hover:text-[#80deea]'
                 >
-                  <span>Choose File</span>
+                  <span className='font-medium text-gray-300'>Choose .txt file</span>
+                  <span className='mt-1 text-xs'>Click to browse</span>
                 </label>
                 <input
                   type='file'
@@ -362,257 +400,302 @@ const IntegrationGateway = observer(() => {
                   className='hidden'
                 />
               </div>
-            </div>
-          </div>
-          <div className='col-span-10 p-6 border rounded-lg shadow-sm bg-[#2a2a2a]'>
-            <div
-              className='grid grid-cols-2 md:grid-cols-4 gap-4 active'
-              id='tcpip-settings'
-            >
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  IP Address:
-                </label>
-                <input
-                  type='text'
-                  id='ip'
-                  value={inputs.ip}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                  onChange={(e) => {
-                    const ip = e.target.value;
-                    setInputs({
-                      ...inputs,
-                      ip,
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium mb-1'>Port:</label>
-                <input
-                  type='text'
-                  id='tcpPort'
-                  value={inputs.port}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                  onChange={(e) => {
-                    const port = e.target.value;
-                    setInputs({
-                      ...inputs,
-                      port,
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Company Code:
-                </label>
-                <input
-                  type='text'
-                  id='companyCode'
-                  disabled
-                  value={inputs.companyCode}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Environment:
-                </label>
-                <input
-                  type='text'
-                  id='environment'
-                  disabled
-                  value={inputs.environment}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Department
-                </label>
-                <select
-                  id='department'
-                  value={inputs.department}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                  onChange={(e) => {
-                    const department = e.target.value;
-                    setInputs({
-                      ...inputs,
-                      department,
-                      instType: '',
-                      instId: '',
-                    });
-                  }}
+            </aside>
+
+            <section className={`${IG_PANEL} p-5 sm:p-6 lg:col-span-9`}>
+              <div className='mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4'>
+                <div>
+                  <h2 className='text-base font-semibold text-white'>
+                    Instrument connection
+                  </h2>
+                  <p className='mt-1 text-sm text-gray-500'>
+                    Configure endpoint and select instrument from master data.
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+                    isConnected
+                      ? 'bg-emerald-900/40 text-emerald-200 ring-1 ring-emerald-700/50'
+                      : 'bg-white/5 text-gray-400 ring-1 ring-white/10'
+                  }`}
                 >
-                  <option>Select</option>
-                  {_.uniq(
-                    instrumentDetails?.map((item) => item.department),
-                  )?.map((item, index) => (
-                    <option key={index} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Instrument Type:
-                </label>
-                <select
-                  id='instrumentType'
-                  value={inputs.instType || 'Select'}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                  onChange={(e) => {
-                    const instType = e.target.value;
-                    const items = instrumentDetails.find(
-                      (item) => item.instType == instType,
-                    );
-                    setInputs({
-                      ...inputs,
-                      instType,
-                      instId: items?.instId,
-                      ip: items?.ipAddress,
-                      port: items?.portNo?.toString(),
-                    });
-                  }}
-                >
-                  <option>Select</option>
-                  {_.uniqBy(
-                    instrumentDetails
-                      ?.map((item) => {
-                        if (item.department == inputs.department) {
-                          return {
-                            instId: item.instId,
-                            instType: item.instType,
-                          };
-                        }
-                      })
-                      ?.filter((item) => item),
-                    'instType',
-                  )?.map((item, index) => (
-                    <option key={index} value={item?.instType}>
-                      {item?.instType}
-                    </option>
-                  ))}
-                </select>
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      isConnected ? 'bg-emerald-400' : 'bg-gray-500'
+                    }`}
+                  />
+                  {isConnected ? 'Connected' : 'Not connected'}
+                </span>
               </div>
 
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Instrument ID:
-                </label>
-                <select
-                  id='instrumentId'
-                  value={inputs.instId || 'Select'}
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-sm text-black'
-                  onChange={(e) => {
-                    const instId = e.target.value;
-                    const items = instrumentDetails.find(
-                      (item) => item.instId == instId,
-                    );
-                    setInputs({
-                      ...inputs,
-                      instType: items?.instType,
-                      instId,
-                      ip: items?.ipAddress,
-                      port: items?.portNo?.toString(),
-                    });
-                  }}
-                >
-                  <option>Select</option>
-                  {_.uniqBy(
-                    instrumentDetails
-                      ?.map((item) => {
-                        if (item.department == inputs.department) {
-                          return {
-                            instId: item.instId,
-                            instType: item.instType,
-                          };
-                        }
-                      })
-                      .filter((item) => item),
-                    'instId',
-                  )?.map((item, index) => (
-                    <option key={index} value={item?.instId}>
-                      {item?.instId}
-                    </option>
-                  ))}
-                </select>
+              <div
+                className='active grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'
+                id='tcpip-settings'
+              >
+                <div>
+                  <label htmlFor='ip' className={IG_FIELD_LABEL}>
+                    IP address
+                  </label>
+                  <input
+                    type='text'
+                    id='ip'
+                    value={inputs.ip}
+                    className={IG_FIELD_CONTROL}
+                    placeholder='127.0.0.1'
+                    onChange={(e) => {
+                      setInputs({ ...inputs, ip: e.target.value });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor='tcpPort' className={IG_FIELD_LABEL}>
+                    Port
+                  </label>
+                  <input
+                    type='text'
+                    id='tcpPort'
+                    value={inputs.port}
+                    className={IG_FIELD_CONTROL}
+                    placeholder='8080'
+                    onChange={(e) => {
+                      setInputs({ ...inputs, port: e.target.value });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor='companyCode' className={IG_FIELD_LABEL}>
+                    Company code
+                  </label>
+                  <input
+                    type='text'
+                    id='companyCode'
+                    disabled
+                    value={inputs.companyCode}
+                    className={IG_FIELD_CONTROL}
+                  />
+                </div>
+                <div>
+                  <label htmlFor='environment' className={IG_FIELD_LABEL}>
+                    Environment
+                  </label>
+                  <input
+                    type='text'
+                    id='environment'
+                    disabled
+                    value={inputs.environment}
+                    className={IG_FIELD_CONTROL}
+                  />
+                </div>
+                <div>
+                  <label htmlFor='department' className={IG_FIELD_LABEL}>
+                    Department
+                  </label>
+                  <select
+                    id='department'
+                    value={inputs.department}
+                    className={IG_FIELD_CONTROL}
+                    onChange={(e) => {
+                      setInputs({
+                        ...inputs,
+                        department: e.target.value,
+                        instType: '',
+                        instId: '',
+                      });
+                    }}
+                  >
+                    <option value=''>Select</option>
+                    {_.uniq(
+                      instrumentDetails?.map((item) => item.department),
+                    )?.map((item, index) => (
+                      <option key={index} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor='instrumentType' className={IG_FIELD_LABEL}>
+                    Instrument type
+                  </label>
+                  <select
+                    id='instrumentType'
+                    value={inputs.instType || ''}
+                    className={IG_FIELD_CONTROL}
+                    onChange={(e) => {
+                      const instType = e.target.value;
+                      const items = instrumentDetails.find(
+                        (item) => item.instType == instType,
+                      );
+                      setInputs({
+                        ...inputs,
+                        instType,
+                        instId: items?.instId ?? '',
+                        ip: items?.ipAddress ?? inputs.ip,
+                        port: items?.portNo?.toString() ?? inputs.port,
+                      });
+                    }}
+                  >
+                    <option value=''>Select</option>
+                    {_.uniqBy(
+                      instrumentDetails
+                        ?.map((item) => {
+                          if (item.department == inputs.department) {
+                            return {
+                              instId: item.instId,
+                              instType: item.instType,
+                            };
+                          }
+                        })
+                        ?.filter((item) => item),
+                      'instType',
+                    )?.map((item, index) => (
+                      <option key={index} value={item?.instType}>
+                        {item?.instType}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor='instrumentId' className={IG_FIELD_LABEL}>
+                    Instrument ID
+                  </label>
+                  <select
+                    id='instrumentId'
+                    value={inputs.instId || ''}
+                    className={IG_FIELD_CONTROL}
+                    onChange={(e) => {
+                      const instId = e.target.value;
+                      const items = instrumentDetails.find(
+                        (item) => item.instId == instId,
+                      );
+                      setInputs({
+                        ...inputs,
+                        instType: items?.instType ?? '',
+                        instId,
+                        ip: items?.ipAddress ?? inputs.ip,
+                        port: items?.portNo?.toString() ?? inputs.port,
+                      });
+                    }}
+                  >
+                    <option value=''>Select</option>
+                    {_.uniqBy(
+                      instrumentDetails
+                        ?.map((item) => {
+                          if (item.department == inputs.department) {
+                            return {
+                              instId: item.instId,
+                              instType: item.instType,
+                            };
+                          }
+                        })
+                        .filter((item) => item),
+                      'instId',
+                    )?.map((item, index) => (
+                      <option key={index} value={item?.instId}>
+                        {item?.instId}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <div className='flex mt-6 gap-2'>
-              <div className='space-x-4'>
+              <div className='mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-5'>
                 <button
                   id='connectButton'
+                  type='button'
                   onClick={handleConnection}
-                  className={`px-6 py-2 rounded-md ${
-                    isConnected ? 'bg-red-500' : 'bg-blue-500'
-                  } text-white`}
+                  className={`rounded-lg px-6 py-2.5 text-sm font-semibold shadow transition focus:outline-none focus-visible:ring-2 ${
+                    isConnected
+                      ? 'bg-rose-600 text-white hover:bg-rose-500 focus-visible:ring-rose-400'
+                      : 'bg-[#00bcd4] text-[#1a1a1a] hover:brightness-110 focus-visible:ring-[#00bcd4]'
+                  }`}
                 >
                   {isConnected ? 'Disconnect' : 'Connect'}
                 </button>
+                <p className='text-xs text-gray-500'>
+                  Validates fields and adds a row to the connection log below.
+                </p>
               </div>
+            </section>
+          </div>
+
+          <section id='logs-container' className={`${IG_PANEL} overflow-hidden`}>
+            <div className='border-b border-white/10 px-5 py-4 sm:px-6'>
+              <h2 className='text-base font-semibold text-white'>
+                Connection log
+              </h2>
+              <p className='mt-1 text-sm text-gray-500'>
+                Active instrument sessions and message history.
+              </p>
             </div>
-          </div>
-        </div>
-        <div
-          id='logs-container'
-          className='flex w-full items-center justify-center mt-10 p-4 bg-[#2a2a2a]'
-        >
-          <div className='overflow-x-auto flex'>
-            <table className='table-auto w-full text-center border-collapse border border-gray-300 shadow-md'>
-              <thead className='bg-blue-500 text-black sticky top-0'>
-                <tr>
-                  <th className='px-4 py-2  border border-gray-300'>
-                    IP Address
-                  </th>
-                  <th className='px-4 py-2  border border-gray-300'>Port</th>
-                  <th className='px-4 py-2  border border-gray-300'>
-                    Company Code
-                  </th>
-                  <th className='px-4 py-2 border border-gray-300'>
-                    Environment
-                  </th>
-                  <th className='px-4 py-2  border border-gray-300'>
-                    Instrument Type
-                  </th>
-                  <th className='px-4 py-2  border border-gray-300'>
-                    Instrument ID
-                  </th>
-                  <th className='px-4 py-2  border border-gray-300'>Status</th>
-                  <th className='px-4 py-2  border border-gray-300'>Message</th>
-                  <th className='px-4 py-2 border border-gray-300'>
-                    Action Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody id='logsTableBody'></tbody>
-            </table>
-          </div>
-        </div>
-        <div
-          id='messageModal'
-          className='fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center'
-        >
-          <div className='bg-white text-black rounded-lg p-4 w-full mx-10'>
-            <h2 className='text-xl font-bold mb-4 text-center'>
-              Data Received To Instrument
-            </h2>
-            <textarea
-              id='secondSpaceContent'
-              className='w-full border border-gray-300 rounded p-2'
-              placeholder='Received Data'
-              rows={10}
-            ></textarea>
-            <div className='flex space-x-2 mt-2 justify-end'>
-              <button
-                className='bg-gray-500 text-white px-4 py-2 rounded'
-                onClick={() => closeMessageModal()}
-              >
-                Close
-              </button>
+            <div className='overflow-x-auto'>
+              <table className='w-full min-w-[960px] border-collapse text-left'>
+                <thead className='sticky top-0 bg-[#242424] text-xs uppercase tracking-wide text-gray-500'>
+                  <tr>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      IP address
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Port
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Company
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Environment
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Type
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Instrument ID
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 font-medium'>
+                      Status
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 text-center font-medium'>
+                      Message
+                    </th>
+                    <th className='border-b border-white/10 px-4 py-3 text-center font-medium'>
+                      Time
+                    </th>
+                  </tr>
+                </thead>
+                <tbody
+                  id='logsTableBody'
+                  className='divide-y divide-white/5 bg-black/20'
+                />
+              </table>
+            </div>
+          </section>
+
+          <div
+            id='messageModal'
+            className='fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm'
+          >
+            <div className='w-full max-w-2xl rounded-xl border border-white/10 bg-[#1e1e1e] p-5 shadow-2xl sm:p-6'>
+              <h2 className='text-lg font-semibold text-white'>
+                Data received from instrument
+              </h2>
+              <p className='mt-1 text-sm text-gray-500'>
+                Raw messages captured for this connection.
+              </p>
+              <textarea
+                id='secondSpaceContent'
+                className='mt-4 w-full rounded-lg border border-white/15 bg-black/30 p-3 font-mono text-sm text-[#80deea] outline-none focus:border-[#00bcd4]/50 focus:ring-2 focus:ring-[#00bcd4]/20'
+                placeholder='Received data will appear here…'
+                rows={12}
+                readOnly
+              />
+              <div className='mt-4 flex justify-end'>
+                <button
+                  type='button'
+                  className='rounded-lg border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/15'
+                  onClick={() => closeMessageModal()}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

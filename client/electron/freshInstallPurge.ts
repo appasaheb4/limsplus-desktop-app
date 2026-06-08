@@ -104,7 +104,10 @@ function listLegacyProductDataDirs(): string[] {
     try {
       for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        if (/^LIMSPLUS Lite /i.test(entry.name)) {
+        if (
+          /^LIMSPLUS Lite /i.test(entry.name) ||
+          /^LIMSPLUS Connect /i.test(entry.name)
+        ) {
           found.add(path.join(root, entry.name));
         }
       }

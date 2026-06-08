@@ -22,7 +22,7 @@ function appSupportDir(folderName) {
 }
 
 const PREFS_FILE = 'user-preferences.json';
-const folders = ['limsplus-connect', 'LimsPlus Connect'];
+const folders = ['limsplus-connect', 'LimsPlus Connect', 'LIMSPLUS Connect'];
 
 const KEYS_TO_CLEAR = [
   'limsLiteSetupWizardComplete',

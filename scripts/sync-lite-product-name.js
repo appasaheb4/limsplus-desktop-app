@@ -1,5 +1,5 @@
 /**
- * Sets electron-builder display name to "LIMSPLUS Lite <version>" from client/package.json.
+ * Sets electron-builder display name to "LIMSPLUS Connect <version>" from client/package.json.
  * Run before electron-builder (production / build:mac / build:win).
  */
 const fs = require('fs');
@@ -10,7 +10,7 @@ const clientPkgPath = path.join(__dirname, '..', 'client', 'package.json');
 function main() {
   const clientPkg = JSON.parse(fs.readFileSync(clientPkgPath, 'utf8'));
   const version = String(clientPkg.version || '0.0.0').trim();
-  const productName = `LIMSPLUS Lite ${version}`;
+  const productName = `LIMSPLUS Connect ${version}`;
 
   clientPkg.build = clientPkg.build || {};
   clientPkg.build.productName = productName;
