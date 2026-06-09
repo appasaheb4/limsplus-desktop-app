@@ -17,6 +17,40 @@ export const LIMS_LITE_API_DEFAULT_PREFERRED_PORT = 8080;
 
 let nestLiteChild: ChildProcess | null = null;
 
+const NEST_LITE_LOG_TAIL_MAX = 24;
+
+function appendNestLiteLogTail(
+  tail: string[],
+  stream: 'stdout' | 'stderr',
+  chunk: Buffer,
+): void {
+  const lines = chunk
+    .toString()
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
+  for (const line of lines) {
+    tail.push(`[${stream}] ${line}`);
+  }
+  while (tail.length > NEST_LITE_LOG_TAIL_MAX) {
+    tail.shift();
+  }
+}
+
+function formatNestLiteStartupFailure(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  logTail: string[],
+): string {
+  const detail =
+    logTail.length > 0
+      ? `\n\nRecent Nest Lite API output:\n${logTail.join('\n')}`
+      : '';
+  return `Nest Lite API exited during startup (code ${code}${
+    signal ? ` signal ${signal}` : ''
+  }). Check logs tagged [LimsPlus Lite API].${detail}`;
+}
+
 export function getLiteBackendRoot(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'lite-backend');
@@ -32,6 +66,21 @@ export function getLiteBackendEntryPath(): string {
   }
   /** e.g. copy `service/dist/*` into app/backend so `main.js` lives at backend root */
   return path.join(root, 'main.js');
+}
+
+/**
+ * Nest GraphQL writes `src/graphql-schema.gql` under `process.cwd()`.
+ * Packaged lite-backend lives in Program Files (read-only on Windows) — use userData instead.
+ */
+function resolveLiteNestChildCwd(backendRoot: string): string {
+  if (!app.isPackaged) {
+    fs.mkdirSync(path.join(backendRoot, 'src'), { recursive: true });
+    return backendRoot;
+  }
+
+  const writableCwd = path.join(app.getPath('userData'), 'lite-nest-writable');
+  fs.mkdirSync(path.join(writableCwd, 'src'), { recursive: true });
+  return writableCwd;
 }
 
 export function stopLiteNestBackend(): void {
@@ -176,10 +225,7 @@ export async function startLiteNestBackend(options: {
     ENV: 'Local',
     PORT: String(port),
     HOST: LIMS_LITE_API_HOST,
-    /**
-     * Highest-priority URIs so Lite wins over stale `backend/.env` (`MONGODB_URL_LOCAL`, etc.).
-     * `core-utils/database.util` checks `LIMSPLUS_LITE_EMBEDDED_MONGO_URI` first.
-     */
+    /** So Lite wins over stale `backend/.env` when `ENV=Local` → `MONGODB_URL_LOCAL`. */
     LIMSPLUS_LITE_EMBEDDED_MONGO_URI: mongoForNest,
     MONGODB_URL_LOCAL: mongoForNest,
     MONGODB_URL_DEV: mongoForNest,
@@ -198,9 +244,12 @@ export async function startLiteNestBackend(options: {
   }
 
   const command = useSystemNode ? 'node' : process.execPath;
+  const childCwd = resolveLiteNestChildCwd(backendRoot);
+
+  const logTail: string[] = [];
 
   const child = spawn(command, [entry], {
-    cwd: backendRoot,
+    cwd: childCwd,
     env: childEnv,
     /** In packaged mode inherit can flood; pipe and forward below. */
     stdio:
@@ -223,14 +272,16 @@ export async function startLiteNestBackend(options: {
   });
 
   if (child.stdout) {
-    child.stdout.on('data', (chunk: Buffer) =>
-      console.info('[LimsPlus Lite API]', chunk.toString().trimEnd()),
-    );
+    child.stdout.on('data', (chunk: Buffer) => {
+      appendNestLiteLogTail(logTail, 'stdout', chunk);
+      console.info('[LimsPlus Lite API]', chunk.toString().trimEnd());
+    });
   }
   if (child.stderr) {
-    child.stderr.on('data', (chunk: Buffer) =>
-      console.error('[LimsPlus Lite API]', chunk.toString().trimEnd()),
-    );
+    child.stderr.on('data', (chunk: Buffer) => {
+      appendNestLiteLogTail(logTail, 'stderr', chunk);
+      console.error('[LimsPlus Lite API]', chunk.toString().trimEnd());
+    });
   }
 
   const timeoutMs = Number.parseInt(
@@ -255,13 +306,7 @@ export async function startLiteNestBackend(options: {
       );
     });
     child.once('exit', (code, signal) => {
-      reject(
-        new Error(
-          `Nest Lite API exited during startup (code ${code}${
-            signal ? ` signal ${signal}` : ''
-          }). Check logs tagged [LimsPlus Lite API].`,
-        ),
-      );
+      reject(new Error(formatNestLiteStartupFailure(code, signal, logTail)));
     });
   });
 

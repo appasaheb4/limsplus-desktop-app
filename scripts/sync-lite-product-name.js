@@ -17,6 +17,8 @@ function main() {
 
   if (clientPkg.build.nsis) {
     clientPkg.build.nsis.shortcutName = productName;
+    /** productName already includes version — avoid "Name 1.0.x 1.0.x" in Windows Installed apps. */
+    clientPkg.build.nsis.uninstallDisplayName = '${productName}';
   }
   if (clientPkg.build.dmg) {
     clientPkg.build.dmg.title = productName;

@@ -1081,10 +1081,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
               <div className='mt-4 rounded-lg border border-rose-800/60 bg-rose-950/30 p-3 text-sm text-rose-100 whitespace-pre-wrap'>
                 {limsLiteSetup.bannerError}
                 <p className='mt-2 text-xs text-rose-200/90'>
-                  If MongoDB crashed after an earlier attempt, quit the app and
-                  delete the folder&nbsp;
-                  <code className='rounded bg-black/30 px-1'>lims-lite-mongodb</code>
-                  &nbsp;inside your profile, then retry.
+                  Failed steps retry automatically (up to 3 times).
                 </p>
               </div>
             )}

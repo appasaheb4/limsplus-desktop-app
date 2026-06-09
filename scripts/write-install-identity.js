@@ -28,7 +28,7 @@ function main() {
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, `${JSON.stringify(identity, null, 2)}\n`);
-  console.info(`[install-identity] ${identity.productName} ${identity.version} (${identity.buildId})`);
+  console.info(`[install-identity] ${identity.productName} (${identity.buildId})`);
 }
 
 main();

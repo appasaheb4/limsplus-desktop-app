@@ -223,7 +223,7 @@ export function ensureFreshInstallOnPackagedStartup(): void {
   }
 
   console.info(
-    `[Fresh install] purging local app data for ${bundled.productName} ${bundled.version} (${bundled.buildId}).`,
+    `[Fresh install] purging local app data for ${bundled.productName} (${bundled.buildId}).`,
   );
   purgeAllKnownAppDataLocations(userDataPath);
   writeStoredInstallState(userDataPath, bundled, appBinaryMtimeMs);

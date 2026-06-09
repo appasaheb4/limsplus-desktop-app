@@ -20,6 +20,7 @@ import {
   dropLiteMongoDatabase,
   readLiteBundledRestoreArtifactFingerprint,
   restoreFromBundledDumpIfNeeded,
+  RestoreDumpResult,
   isLiteMongoServerActive,
   getLiteMongoPlatformSummary,
   getLiteExternalMongoUriFromEnv,
@@ -1072,6 +1073,89 @@ function resolveLocalLoginCompanyForLite(
   return getLocalLoginCompanyCodeFromStore();
 }
 
+function getLiteFirstSetupRetryCount(): number {
+  const raw = process.env.LIMSPLUS_LITE_SETUP_MAX_RETRIES?.trim();
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.min(parsed, 8);
+    }
+  }
+  return 3;
+}
+
+function liteSetupRetryDelayMs(attempt: number): number {
+  return 1200 * attempt;
+}
+
+function liteSetupErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function cleanupLiteServicesBeforeSetupRetry(): Promise<void> {
+  stopLimsPortalStaticServer();
+  stopLiteNestBackend();
+  if (limsPlusLiteWindow && !limsPlusLiteWindow.isDestroyed()) {
+    limsPlusLiteWindow.close();
+    limsPlusLiteWindow = null;
+  }
+  if (!getLiteExternalMongoUriFromEnv()) {
+    try {
+      await stopLiteMongoServer();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function runWithLiteSetupRetries<T>(
+  wc: WebContents,
+  step: number,
+  stepTitle: string,
+  run: () => Promise<T>,
+  options: { silent: boolean },
+): Promise<T> {
+  const maxAttempts = getLiteFirstSetupRetryCount();
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (attempt > 1 && !options.silent) {
+        emitLitePhase(
+          wc,
+          step,
+          `${stepTitle} — automatic retry ${attempt}/${maxAttempts}…`,
+        );
+      }
+      return await run();
+    } catch (err) {
+      lastErr = err;
+      const msg = liteSetupErrorMessage(err);
+      console.warn(
+        `[LimsPlus Lite] setup step ${step} attempt ${attempt}/${maxAttempts} failed:`,
+        msg,
+      );
+      if (attempt >= maxAttempts) break;
+      if (!options.silent) {
+        emitLitePhase(
+          wc,
+          step,
+          `${stepTitle} failed (attempt ${attempt}/${maxAttempts}). Retrying in ${Math.round(liteSetupRetryDelayMs(attempt) / 1000)}s…`,
+        );
+      }
+      await cleanupLiteServicesBeforeSetupRetry();
+      await new Promise((resolve) =>
+        setTimeout(resolve, liteSetupRetryDelayMs(attempt)),
+      );
+    }
+  }
+
+  const msg = liteSetupErrorMessage(lastErr);
+  throw new Error(
+    `Step ${step} (${stepTitle}) failed after ${maxAttempts} automatic retries.\n\n${msg}`,
+  );
+}
+
 async function prepareAndOpenLimsPlusLite(
   wc: WebContents,
   payload?: PrepareLimsLitePayload,
@@ -1140,52 +1224,83 @@ async function prepareAndOpenLimsPlusLite(
     }
 
     const externalMongoUri = getLiteExternalMongoUriFromEnv();
-    if (externalMongoUri) {
-      emitPhase(
-        2,
-        `Using MongoDB from LIMSPLUS_LITE_EXTERNAL_MONGO_URI (${redactMongoUriForLogs(
-          externalMongoUri,
-        )}) — embedded MongoDB is skipped. Ensure mongod is running.`,
-      );
-    } else {
+    const alreadyRestored = isFirstTimeSetup
+      ? false
+      : !!store.get('limsOfflineDbRestored');
+
+    const runMongoStep = async (): Promise<{
+      mongoUri: string;
+      liteMongoTcpPortForJson: number | null;
+    }> => {
+      if (externalMongoUri) {
+        emitPhase(
+          2,
+          `Using MongoDB from LIMSPLUS_LITE_EXTERNAL_MONGO_URI (${redactMongoUriForLogs(
+            externalMongoUri,
+          )}) — embedded MongoDB is skipped. Ensure mongod is running.`,
+        );
+        const uri = externalMongoUri;
+        emitPhase(
+          2,
+          `Verifying MongoDB accepts connections (${redactMongoUriForLogs(uri)})…`,
+        );
+        await waitUntilLiteMongoAcceptsConnections(uri);
+        return {
+          mongoUri: uri,
+          liteMongoTcpPortForJson: mongoTcpListenPortHint(uri),
+        };
+      }
+
       emitPhase(
         2,
         `Downloading or starting MongoDB (${LIMS_LITE_MONGO_LOOPBACK_BIND}, default tcp ${LIMS_LITE_MONGO_DEFAULT_PREFERRED_PORT} — stops other listeners on that port unless LIMSPLUS_LITE_DO_NOT_KILL_OCCUPIED_MONGO_PORT=1; first launch may download server files)...`,
       );
-    }
+      const embedded = await ensureLiteMongoRunning();
+      emitPhase(
+        2,
+        `Verifying MongoDB accepts connections (${redactMongoUriForLogs(embedded.mongoUri)})…`,
+      );
+      await waitUntilLiteMongoAcceptsConnections(embedded.mongoUri);
+      if (!app.isPackaged) {
+        console.info(
+          '[LimsPlus Lite] Mongo ready (ping ok):',
+          redactMongoUriForLogs(embedded.mongoUri),
+        );
+      }
+      return {
+        mongoUri: embedded.mongoUri,
+        liteMongoTcpPortForJson: embedded.listenPort,
+      };
+    };
 
     let mongoUri: string;
     let liteMongoTcpPortForJson: number | null = null;
-    if (externalMongoUri) {
-      mongoUri = externalMongoUri;
-      liteMongoTcpPortForJson = mongoTcpListenPortHint(mongoUri);
-    } else {
-      const embedded = await ensureLiteMongoRunning();
-      mongoUri = embedded.mongoUri;
-      liteMongoTcpPortForJson = embedded.listenPort;
+    try {
+      const mongoReady = isFirstTimeSetup
+        ? await runWithLiteSetupRetries(
+            wc,
+            2,
+            'Start local MongoDB',
+            runMongoStep,
+            { silent },
+          )
+        : await runMongoStep();
+      mongoUri = mongoReady.mongoUri;
+      liteMongoTcpPortForJson = mongoReady.liteMongoTcpPortForJson;
+    } catch (mongoErr: unknown) {
+      console.error(mongoErr);
+      const errText = liteSetupErrorMessage(mongoErr);
+      emitError(errText);
+      return { ok: false, error: errText };
     }
 
-    emitPhase(
-      2,
-      `Verifying MongoDB accepts connections (${redactMongoUriForLogs(mongoUri)})…`,
-    );
-    await waitUntilLiteMongoAcceptsConnections(mongoUri);
-    if (!app.isPackaged) {
-      console.info(
-        '[LimsPlus Lite] Mongo ready (ping ok):',
-        redactMongoUriForLogs(mongoUri),
-      );
-    }
-    const alreadyRestored = isFirstTimeSetup
-      ? false
-      : !!store.get('limsOfflineDbRestored');
-    if (isFirstTimeSetup) {
-      store.set('limsOfflineDbRestored', false);
-      emitPhase(
-        3,
-        'Dropping existing local MongoDB database and importing fresh bundled backup…',
-      );
-      try {
+    const runRestoreStep = async () => {
+      if (isFirstTimeSetup) {
+        store.set('limsOfflineDbRestored', false);
+        emitPhase(
+          3,
+          'Dropping existing local MongoDB database and importing fresh bundled backup…',
+        );
         const dbNames = new Set<string>([DEFAULT_LITE_DB_NAME]);
         const prior = readLiteBundledRestoreArtifactFingerprint();
         if (prior?.lastDatabaseName) {
@@ -1194,46 +1309,58 @@ async function prepareAndOpenLimsPlusLite(
         for (const dbName of dbNames) {
           await dropLiteMongoDatabase(mongoUri, dbName);
         }
-      } catch (dropErr: unknown) {
-        const errText =
-          dropErr instanceof Error ? dropErr.message : String(dropErr);
-        emitError(errText);
-        return { ok: false, error: errText };
+      } else {
+        emitPhase(
+          3,
+          'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
+        );
       }
-    } else {
-      emitPhase(
-        3,
-        'Bundled Mongo backup (limsplus-prod.zip) — import when new/changed…',
-      );
-    }
-    let restoreOutcome;
+      return restoreFromBundledDumpIfNeeded(mongoUri, alreadyRestored, {
+        forceFreshImport: isFirstTimeSetup,
+      });
+    };
+
+    let restoreOutcome: RestoreDumpResult;
     try {
-      restoreOutcome = await restoreFromBundledDumpIfNeeded(
-        mongoUri,
-        alreadyRestored,
-        { forceFreshImport: isFirstTimeSetup },
-      );
+      restoreOutcome = isFirstTimeSetup
+        ? await runWithLiteSetupRetries(
+            wc,
+            3,
+            'Restore database backup',
+            runRestoreStep,
+            { silent },
+          )
+        : await runRestoreStep();
     } catch (restoreErr: unknown) {
       console.error(restoreErr);
-      const errText =
-        restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+      const errText = liteSetupErrorMessage(restoreErr);
       emitError(errText);
-      return {
-        ok: false,
-        error: errText,
-      };
+      return { ok: false, error: errText };
     }
-    emitPhase(
-      4,
-      'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
-    );
-    let liteApiBaseUrl: string;
-    let liteApiPort: number;
-    try {
-      const started = await startLiteNestBackend({
+
+    const runNestStep = async () => {
+      emitPhase(
+        4,
+        'Starting NestJS API… This can take several minutes while the server binds and optional modules initialise. Waiting for HTTP on loopback.',
+      );
+      return startLiteNestBackend({
         mongoUri,
         databaseName: restoreOutcome.databaseName,
       });
+    };
+
+    let liteApiBaseUrl: string;
+    let liteApiPort: number;
+    try {
+      const started = isFirstTimeSetup
+        ? await runWithLiteSetupRetries(
+            wc,
+            4,
+            'Start NestJS API',
+            runNestStep,
+            { silent },
+          )
+        : await runNestStep();
       liteApiBaseUrl = started.apiBaseUrl;
       liteApiPort = started.port;
       if (!app.isPackaged) {
@@ -1241,8 +1368,7 @@ async function prepareAndOpenLimsPlusLite(
       }
     } catch (nestErr: unknown) {
       console.error(nestErr);
-      const errText =
-        nestErr instanceof Error ? nestErr.message : String(nestErr);
+      const errText = liteSetupErrorMessage(nestErr);
       emitError(errText);
       return { ok: false, error: errText };
     }
@@ -1276,7 +1402,7 @@ async function prepareAndOpenLimsPlusLite(
     };
 
     const portalRoot = path.dirname(indexPath);
-    try {
+    const runPortalStep = async () => {
       const nestGraphqlUrl = `${liteApiBaseUrl.replace(/\/$/, '')}/graphql`;
       const baseUrl = await startLimsPortalStaticServer(
         portalRoot,
@@ -1289,11 +1415,24 @@ async function prepareAndOpenLimsPlusLite(
       );
       emitPhase(6, `Frontend static server ready — opening ${portalUrl}`);
       await ensureLocalLimsPlusLiteWindowOpen(portalUrl, companyCodeForLite);
+    };
+
+    try {
+      if (isFirstTimeSetup) {
+        await runWithLiteSetupRetries(
+          wc,
+          6,
+          'Open LIMSPLUS Lite',
+          runPortalStep,
+          { silent },
+        );
+      } else {
+        await runPortalStep();
+      }
     } catch (serveErr: unknown) {
       stopLiteNestBackend();
-      const detail =
-        serveErr instanceof Error ? serveErr.message : String(serveErr);
-      const msg = `Failed to start Lite portal UI server:\n${detail}`;
+      const errText = liteSetupErrorMessage(serveErr);
+      const msg = `Failed to start Lite portal UI server:\n${errText}`;
       emitError(msg);
       return { ok: false, error: msg };
     }
