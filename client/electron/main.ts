@@ -605,7 +605,7 @@ function getDisplayForMainWindow(): Electron.Display {
   return screen.getPrimaryDisplay();
 }
 
-function getIntegrationGatewayWindowBounds(): Electron.Rectangle {
+function getIntegrationPlatformWindowBounds(): Electron.Rectangle {
   const area = getDisplayForMainWindow().workArea;
   const width = Math.min(1024, Math.max(960, area.width - 48));
   const height = Math.min(768, Math.max(640, area.height - 48));
@@ -617,7 +617,7 @@ function getIntegrationGatewayWindowBounds(): Electron.Rectangle {
   };
 }
 
-function startIntegrationGatewayPythonServer(): void {
+function startIntegrationPlatformPythonServer(): void {
   if (serverProcess) return;
 
   if (isDev) {
@@ -650,20 +650,20 @@ function startIntegrationGatewayPythonServer(): void {
   });
 }
 
-function openIntegrationGatewayWindow(route: string): void {
+function openIntegrationPlatformWindow(route: string): void {
   if (childWindows && !childWindows.isDestroyed()) {
     childWindows.show();
     childWindows.focus();
     return;
   }
 
-  const bounds = getIntegrationGatewayWindowBounds();
+  const bounds = getIntegrationPlatformWindowBounds();
 
   childWindows = new BrowserWindow({
     ...bounds,
     minWidth: 960,
     minHeight: 640,
-    title: `Integration Gateway — ${getPackagedAppDisplayName()}`,
+    title: `INTEGRATION PLATFORM — ${getPackagedAppDisplayName()}`,
     icon: path.join(__dirname, '../assets/icon.ico'),
     skipTaskbar: process.platform !== 'win32',
     resizable: true,
@@ -706,14 +706,14 @@ function openIntegrationGatewayWindow(route: string): void {
     childWindows.focus();
   });
 
-  startIntegrationGatewayPythonServer();
+  startIntegrationPlatformPythonServer();
 
   childWindows.on('closed', () => {
     if (serverProcess) {
       serverProcess.kill();
       serverProcess = null;
       console.info(
-        'Python server stopped because the integration-gateway screen was closed.',
+        'Python server stopped because the integration-platform screen was closed.',
       );
     }
     childWindows = null;
@@ -836,9 +836,9 @@ app.whenReady().then(() => {
   });
 });
 
-ipcMain.on('navigate-to-integration-gateway', (_event, route) => {
-  openIntegrationGatewayWindow(
-    typeof route === 'string' && route.trim() ? route : '/integration-gateway',
+ipcMain.on('navigate-to-integration-platform', (_event, route) => {
+  openIntegrationPlatformWindow(
+    typeof route === 'string' && route.trim() ? route : '/integration-platform',
   );
 });
 

@@ -76,8 +76,8 @@ const DUMMY_NOTIFICATIONS: DummyNotification[] = [
   },
   {
     id: 'n4',
-    title: 'Integration Gateway heartbeat',
-    message: 'Gateway responded OK. Last sync 2026-05-26T09:12:00Z.',
+    title: 'INTEGRATION PLATFORM heartbeat',
+    message: 'Platform responded OK. Last sync 2026-05-26T09:12:00Z.',
     time: '3 hr ago',
     read: true,
     level: 'info',
@@ -188,7 +188,7 @@ type HomeProps = {
 };
 
 const Home = observer(({ activationProfile: activationProfileProp = null }: HomeProps) => {
-  const { integrationGatewayStore } = useStores();
+  const { integrationPlatformStore } = useStores();
   const [isOpen, setIsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] =
@@ -270,7 +270,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
 
     const onSendUser = (_event: IpcRendererEvent, user: User) => {
       setSignedInUserId(user.userId);
-      void integrationGatewayStore.integrationGatewayService
+      void integrationPlatformStore.integrationPlatformService
         .fetchEnvironment({ code: user.companyCode })
         .catch((err: unknown) => {
           console.warn(
@@ -286,7 +286,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
       ipcRenderer.removeListener('activation-profile-updated', onProfileUpdated);
       ipcRenderer.removeListener('send-user', onSendUser);
     };
-  }, [integrationGatewayStore, activationProfileProp]);
+  }, [integrationPlatformStore, activationProfileProp]);
 
   useEffect(() => {
     let cancelled = false;
@@ -761,12 +761,12 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                       className='item'
                       onClick={() => {
                         ipcRenderer.send(
-                          'navigate-to-integration-gateway',
-                          '/integration-gateway',
+                          'navigate-to-integration-platform',
+                          '/integration-platform',
                         );
                       }}
                     >
-                      Integration Gateway
+                      INTEGRATION PLATFORM
                     </button>
                     <button
                       type='button'

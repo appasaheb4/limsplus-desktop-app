@@ -5,7 +5,7 @@ import {
   Navigate,
 } from 'react-router-dom';
 import Home from './modules/home/home.screen';
-import IntegrationGateway from './modules/integration-gateway/integrationGateway.screen';
+import IntegrationPlatform from './modules/integration-platform/integrationPlatform.screen';
 import ActivationKeyGate from './modules/license-activation/activation-key-gate.component';
 
 import { stores } from './stores';
@@ -143,8 +143,8 @@ function App() {
               }
             />
             <Route
-              path='/integration-gateway'
-              element={<IntegrationGateway />}
+              path='/integration-platform'
+              element={<IntegrationPlatform />}
             />
             <Route path='*' element={<Navigate to='/dashboard' replace />} />
           </Routes>

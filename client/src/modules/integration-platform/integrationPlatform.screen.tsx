@@ -21,8 +21,8 @@ type User = {
   environment: string;
 };
 
-const IntegrationGateway = observer(() => {
-  const { integrationGatewayStore } = useStores();
+const IntegrationPlatform = observer(() => {
+  const { integrationPlatformStore } = useStores();
   const [inputs, setInputs] = useState({
     ip: '127.0.0.1',
     port: '8080',
@@ -50,7 +50,7 @@ const IntegrationGateway = observer(() => {
         companyCode: user.companyCode,
         environment: user.environment ?? prev.environment,
       }));
-      integrationGatewayStore.integrationGatewayService
+      integrationPlatformStore.integrationPlatformService
         .findByFieldsInstrumentMaster({
           input: { filter: { companyCode: user.companyCode } },
         })
@@ -68,11 +68,11 @@ const IntegrationGateway = observer(() => {
 
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', onSendUser);
-    ipcRenderer.send('set-title', 'Integration Gateway');
+    ipcRenderer.send('set-title', 'INTEGRATION PLATFORM');
     return () => {
       ipcRenderer.removeListener('send-user', onSendUser);
     };
-  }, [integrationGatewayStore]);
+  }, [integrationPlatformStore]);
 
   const openMessageModal = () => {
     const modal = document.getElementById('messageModal');
@@ -329,7 +329,7 @@ const IntegrationGateway = observer(() => {
             LIMS<span className='text-[#00bcd4]'>PLUS</span> Connect
           </span>
           <span className='hidden border-l border-gray-600 pl-3 text-xs font-normal text-gray-500 sm:inline'>
-            Integration Gateway
+            INTEGRATION PLATFORM
           </span>
         </div>
       </header>
@@ -704,4 +704,4 @@ const IntegrationGateway = observer(() => {
   );
 });
 
-export default IntegrationGateway;
+export default IntegrationPlatform;

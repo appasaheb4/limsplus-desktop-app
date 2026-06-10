@@ -6,15 +6,15 @@ import {
 import { stores } from '../../../stores';
 import { FIND_BY_FIELDS } from './mutation';
 
-export class IntegrationGatewayService {
+export class IntegrationPlatformService {
   async fetchEnvironment(payload: any) {
     try {
       const result = await service
         .post('/company/companyFindByFields', { ...payload })
         .then((response) => response.data);
       if (result?.success) {
-        stores.integrationGatewayStore.updateIntegrationGateway({
-          ...stores.integrationGatewayStore.integrationGateway,
+        stores.integrationPlatformStore.updateIntegrationPlatform({
+          ...stores.integrationPlatformStore.integrationPlatform,
           companyDetails: result?.companyList[0],
           environment: result?.companyList[0]?.environment,
         });
@@ -30,7 +30,7 @@ export class IntegrationGatewayService {
             ? error.message
             : String(error);
       throw new Error(
-        `[IntegrationGateway] fetchEnvironment failed: ${message}`,
+        `[IntegrationPlatform] fetchEnvironment failed: ${message}`,
       );
     }
   }
@@ -41,8 +41,8 @@ export class IntegrationGatewayService {
         .post('/communication/instrumentTypeList', { ...payload })
         .then((response) => response.data);
       if (result?.success) {
-        stores.integrationGatewayStore.updateIntegrationGateway({
-          ...stores.integrationGatewayStore.integrationGateway,
+        stores.integrationPlatformStore.updateIntegrationPlatform({
+          ...stores.integrationPlatformStore.integrationPlatform,
           instrumentTypeList: result?.instrumentTypeList,
         });
       } else {

@@ -1,14 +1,14 @@
 import React from 'react';
-import { IntegrationGatewayStore } from '../modules/integration-gateway/store/integrationGateway.store';
+import { IntegrationPlatformStore } from '../modules/integration-platform/store/integrationPlatform.store';
 import { LoginStore } from '../modules/login/stores/login.store';
 export class Stores {
   private isLoading: boolean;
-  integrationGatewayStore: IntegrationGatewayStore;
+  integrationPlatformStore: IntegrationPlatformStore;
   loginStore: LoginStore;
   localStoragePath: string = '';
   constructor() {
     this.isLoading = false;
-    this.integrationGatewayStore = new IntegrationGatewayStore();
+    this.integrationPlatformStore = new IntegrationPlatformStore();
     this.loginStore = new LoginStore();
   }
 

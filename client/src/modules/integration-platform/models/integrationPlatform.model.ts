@@ -1,4 +1,4 @@
-export class IntegrationGateway {
+export class IntegrationPlatform {
   companyDetails: any;
   companyList: Array<any>;
   environment: Array<string>;
