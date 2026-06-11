@@ -622,7 +622,7 @@ const IntegrationPlatform = observer(() => {
           <section id='logs-container' className={`${IG_PANEL} overflow-hidden`}>
             <div className='border-b border-white/10 px-5 py-4 sm:px-6'>
               <h2 className='text-base font-semibold text-white'>
-                Connection log
+              Communication log
               </h2>
               <p className='mt-1 text-sm text-gray-500'>
                 Active instrument sessions and message history.
