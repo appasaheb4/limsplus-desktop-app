@@ -27,6 +27,7 @@ function readOnlineStatus(): boolean {
 
 export default function ActivationKeyGate({ onActivated }: Props) {
   const [activationKey, setActivationKey] = useState('');
+  const [clientName, setClientName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(readOnlineStatus);
@@ -44,7 +45,7 @@ export default function ActivationKeyGate({ onActivated }: Props) {
   }, []);
 
   const verifyActivationKey = useCallback(
-    async (activeKey: string): Promise<{ ok: boolean; message?: string }> => {
+    async (activeKey: string, clientName: string): Promise<{ ok: boolean; message?: string }> => {
       const trimmed = activeKey.trim();
       if (trimmed.length !== MAX_ACTIVATION_KEY_LENGTH) {
         return {
@@ -61,7 +62,10 @@ export default function ActivationKeyGate({ onActivated }: Props) {
           .post('/company/activationDesktopApp', {
             filter: {
               activeKey: trimmed,
-              systemConfig,
+              systemConfig:{
+                 clientName: clientName,
+                ...systemConfig,
+              },
             },
           })
           .then((response) => response.data)) as {
@@ -136,7 +140,7 @@ export default function ActivationKeyGate({ onActivated }: Props) {
     setError(null);
     setBusy(true);
     try {
-      const result = await verifyActivationKey(activationKey);
+      const result = await verifyActivationKey(activationKey, clientName);
       if (result.ok) {
         onActivated();
         return;
@@ -147,7 +151,10 @@ export default function ActivationKeyGate({ onActivated }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [activationKey, onActivated, verifyActivationKey]);
+  }, [activationKey, clientName, onActivated, verifyActivationKey]);
+
+  const clientNameTooShort =
+    clientName.length > 0 && clientName.trim().length <= 2;
 
   return (
     <div
@@ -199,20 +206,62 @@ export default function ActivationKeyGate({ onActivated }: Props) {
           onChange={(e) =>
             setActivationKey(sanitizeActivationKeyInput(e.target.value))
           }
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              !busy &&
-              activationKey.length === MAX_ACTIVATION_KEY_LENGTH
-            ) {
-              void submit();
-            }
-          }}
+          // onKeyDown={(e) => {
+          //   if (
+          //     e.key === 'Enter' &&
+          //     !busy &&
+          //     activationKey.length === MAX_ACTIVATION_KEY_LENGTH
+          //   ) {
+          //     void submit();
+          //   }
+          // }}
           className='mt-2 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 font-mono text-base text-white placeholder:text-gray-500 focus:border-[#00bcd4] focus:outline-none focus:ring-1 focus:ring-[#00bcd4] disabled:opacity-60'
           aria-describedby='activation-key-hint'
         />
         <p id='activation-key-hint' className='mt-1 text-xs text-gray-500'>
           {activationKey.length}/{MAX_ACTIVATION_KEY_LENGTH} characters
+        </p>
+
+        <label
+          htmlFor='client-name-input'
+          className='mt-4 block text-sm font-medium text-gray-300'
+        >
+          Client name
+        </label>
+        <input
+          id='client-name-input'
+          type='text'
+          autoComplete='off'
+          placeholder='Enter client name'
+          required
+          disabled={busy || !isOnline}
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+          onKeyDown={(e) => {
+            if (
+              e.key === 'Enter' &&
+              !busy &&
+              activationKey.length === MAX_ACTIVATION_KEY_LENGTH &&
+              clientName.trim().length > 2
+            ) {
+              void submit();
+            }
+          }}
+          className={`mt-2 w-full rounded-lg border bg-black/40 px-3 py-2.5 font-mono text-base text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 disabled:opacity-60 ${
+            clientNameTooShort
+              ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500'
+              : 'border-white/15 focus:border-[#00bcd4] focus:ring-[#00bcd4]'
+          }`}
+          aria-describedby='client-name-hint'
+          aria-invalid={clientNameTooShort}
+        />
+        <p
+          id='client-name-hint'
+          className={`mt-1 text-xs ${clientNameTooShort ? 'text-rose-400' : 'text-gray-500'}`}
+        >
+          {clientNameTooShort
+            ? 'Client name must be more than 2 characters.'
+            : 'At least 3 characters required.'}
         </p>
 
         {error && (
@@ -229,7 +278,8 @@ export default function ActivationKeyGate({ onActivated }: Props) {
           disabled={
             busy ||
             !isOnline ||
-            activationKey.length !== MAX_ACTIVATION_KEY_LENGTH
+            activationKey.length !== MAX_ACTIVATION_KEY_LENGTH ||
+            clientName.trim().length <= 2
           }
           onClick={() => void submit()}
           className='mt-5 w-full rounded-lg bg-[#00bcd4] py-2.5 text-sm font-semibold text-[#1a1a1a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
