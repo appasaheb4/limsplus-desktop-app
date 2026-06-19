@@ -81,17 +81,15 @@ export default function ActivationKeyGate({ onActivated }: Props) {
              result.message ?? 'Invalid activation key. Please check and try again.',
           };
         }
-
         const profile = buildProfileForStorage(
           result.company ?? result,
         );
+        // console.log({profile});
         const companyCode = extractLocalLoginCompanyCode(profile);
-
         const savedProfile = (await ipcRenderer.invoke(
           'save-activation-profile',
           profile,
         )) as { ok?: boolean };
-
         if (!savedProfile?.ok) {
           return {
             ok: false,
@@ -99,12 +97,11 @@ export default function ActivationKeyGate({ onActivated }: Props) {
               'Activation succeeded online but company profile could not be saved on this device.',
           };
         }
-
         const persisted = (await ipcRenderer.invoke(
           'persist-license-activation',
           { activationKey: trimmed, profile, localLoginCompany: companyCode },
         )) as { ok?: boolean; message?: string };
-
+        // console.log({persisted});
         if (!persisted?.ok) {
           return {
             ok: false,
@@ -113,7 +110,6 @@ export default function ActivationKeyGate({ onActivated }: Props) {
               'Activation succeeded online but could not be saved on this device.',
           };
         }
-
         if (companyCode) {
           setLocalLoginCompanyCode(companyCode);
         }
@@ -286,7 +282,6 @@ export default function ActivationKeyGate({ onActivated }: Props) {
         >
           {busy ? 'Verifying…' : 'Activate'}
         </button>
-
         <p className='mt-3 rounded-lg border border-white/10 bg-black/25 px-3 py-2.5 text-center text-sm leading-relaxed text-gray-400'>
           <span className='mr-1' aria-hidden>
             🔒

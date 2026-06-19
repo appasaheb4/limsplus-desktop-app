@@ -1,5 +1,15 @@
 /** Flattened company profile from `activationDesktopApp` (stored in user-preferences). */
 export type DesktopActivationProfile = {
+  desktopAppConfiguration?: {
+    [key: string]: unknown;
+    sessionDetails?: {
+      systemConfig?: {
+        clientName?: string;
+        [key: string]: unknown;
+      };
+      [key: string]: unknown;
+    };
+  };
   name?: string;
   code?: string;
   companyCode?: string;
@@ -81,15 +91,24 @@ export function normalizeActivationProfile(
       pickString(record, 'code', 'companyCode', 'company_code') ?? undefined,
     email: pickString(record, 'email', 'contactEmail', 'mail') ?? undefined,
     mobile:
-      pickString(record, 'mobile', 'mobileNo', 'mobile_no', 'phone', 'contactMobile') ??
-      undefined,
+      pickString(
+        record,
+        'mobile',
+        'mobileNo',
+        'mobile_no',
+        'phone',
+        'contactMobile',
+      ) ?? undefined,
     phone:
-      pickString(record, 'phone', 'mobile', 'mobileNo', 'telephone') ?? undefined,
+      pickString(record, 'phone', 'mobile', 'mobileNo', 'telephone') ??
+      undefined,
     environment: pickString(record, 'environment', 'env') ?? undefined,
   };
 }
 
-export function buildProfileForStorage(apiBody: unknown): DesktopActivationProfile {
+export function buildProfileForStorage(
+  apiBody: unknown,
+): DesktopActivationProfile {
   const normalized = normalizeActivationProfile(apiBody);
   if (normalized) return normalized;
   return normalizeActivationProfile({ company: apiBody }) ?? {};

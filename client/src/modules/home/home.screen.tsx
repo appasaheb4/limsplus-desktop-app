@@ -691,7 +691,6 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
           >
             Clipboard Parser
           </button>
-
           {hasActivationProfileContent(activationProfile) && (
             <div className='mt-auto border-t border-white/10 pt-4'>
               <div className='sidebar-nav-label'>Licensed company</div>
@@ -714,7 +713,6 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
             </div>
           )}
         </aside>
-
         <main className='flex-1 overflow-auto bg-gradient-to-br from-[#1e293b] via-[#1a1a24] to-[#312e81]'>
           {activeSection === 'dashboard' && (
             <div className='p-4'>

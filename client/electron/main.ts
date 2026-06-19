@@ -8,6 +8,7 @@ import {
   session,
   dialog,
   screen,
+  Notification,
 } from 'electron';
 import * as http from 'http';
 import * as https from 'https';
@@ -1656,12 +1657,15 @@ ipcMain.handle(
         : typeof payload?.activationKey === 'string'
           ? payload.activationKey.trim()
           : '';
+    // console.log({ key });
     if (!key.length) {
       return { ok: false, message: 'Please enter your activation key.' };
+    } else {
+      // console.log({ key });
+      store.set('activationKey', key);
     }
     persistSecureActivationRecord(key);
     store.set('licenseActivated', false);
-
     const profile =
       typeof payload === 'object' && payload.profile != null
         ? payload.profile
@@ -1690,8 +1694,9 @@ ipcMain.handle(
   },
 );
 
-ipcMain.handle('get-local-login-company', () => {
-  return getLocalLoginCompanyCodeFromStore();
+ipcMain.handle('set-activation-key', (event, activationKey: string) => {
+  store.set('activationKey', activationKey);
+  return { ok: true };
 });
 
 function broadcastLicenseActivationCleared(sender: WebContents): void {
@@ -1741,6 +1746,14 @@ ipcMain.handle('save-activation-profile', (event, profile: unknown) => {
 
 ipcMain.handle('get-activation-profile', () => {
   return store.get('activationProfile') ?? null;
+});
+
+ipcMain.handle('get-local-login-company', () => {
+  return getLocalLoginCompanyCodeFromStore();
+});
+
+ipcMain.handle('get-activation-key', () => {
+  return store.get('activationKey') ?? null;
 });
 
 /** Removes local activation (e.g. on sign-out). Plaintext key is never stored. */
@@ -1951,4 +1964,8 @@ ipcMain.handle('send-ws', (event, message) => {
   } else {
     event.sender.send('ws-error', 'WebSocket is not connected');
   }
+});
+
+ipcMain.handle('show-toast', (event, message) => {
+  new Notification({ title: 'Info', body: message }).show();
 });

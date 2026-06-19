@@ -4,6 +4,7 @@ import {
   activationProfileLabel,
   hasActivationProfileContent,
 } from '../../license-activation/desktop-activation-profile.types';
+import { service } from '../../../core-services/rest-api';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -42,12 +43,12 @@ const AccountModal: React.FC<AccountModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-
     const load = async () => {
       try {
         const stored = (await ipcRenderer.invoke(
           'get-activation-profile',
         )) as DesktopActivationProfile | null;
+        // console.log({stored});
         if (hasActivationProfileContent(stored)) {
           setProfile(stored);
         } else if (hasActivationProfileContent(activationProfileProp)) {
@@ -61,9 +62,7 @@ const AccountModal: React.FC<AccountModalProps> = ({
         }
       }
     };
-
     void load();
-
     const onUpdated = (
       _event: unknown,
       next: DesktopActivationProfile | null,
@@ -132,6 +131,87 @@ const AccountModal: React.FC<AccountModalProps> = ({
                   {companyName}
                 </h3>
               </div>
+
+              <div className='mt-4 space-y-2 rounded-lg border border-white/10 bg-[#2a2a2a] p-4'>
+                <p className='text-xs font-semibold uppercase tracking-wide text-[#00bcd4]'>
+                 System Details
+                </p>
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="modal-client-name-input"
+                    className="text-sm text-gray-200 font-medium"
+                  >
+                    Client Name
+                  </label>
+                  <input
+                    id="modal-client-name-input"
+                    type="text"
+                    value={profile?.desktopAppConfiguration?.sessionDetails?.systemConfig?.clientName ?? companyName ?? ''}
+                    onChange={(e) => {
+                      const clientName = e.target.value;
+                      setProfile({
+                        ...profile,
+                        desktopAppConfiguration: {
+                          ...profile?.desktopAppConfiguration,
+                          sessionDetails: {
+                            ...profile?.desktopAppConfiguration?.sessionDetails,
+                            systemConfig: {
+                              ...profile?.desktopAppConfiguration?.sessionDetails?.systemConfig,
+                              clientName,
+                            },
+                          }
+                          }
+                        });
+                    }}
+                    onBlur={async(e) => {
+                      const clientName = e.target.value;
+                      const activeKey = (await ipcRenderer.invoke('get-activation-key')) as string | null;
+                      // console.log({activeKey});
+                      if (activeKey && clientName?.length > 2) {
+                        const result = (await service
+                          .post('/company/systemConfigUpdate', {
+                            filter: {
+                              company:profile,
+                              activeKey,
+                              systemConfig:{
+                                ...profile?.desktopAppConfiguration?.sessionDetails?.systemConfig,
+                              },
+                            },
+                          })
+                          .then((response) => response.data)) as {
+                          success?: boolean;
+                          message?: string;
+                          company?: Record<string, unknown>;
+                        };
+                        if(result.success){
+                          const message = result?.message ?? 'Client name updated successfully';
+                          await ipcRenderer.invoke(
+                            'save-activation-profile',
+                            {...profile, desktopAppConfiguration: {
+                              ...profile?.desktopAppConfiguration,
+                              sessionDetails: {
+                                ...profile?.desktopAppConfiguration?.sessionDetails,
+                                systemConfig: {
+                                  ...profile?.desktopAppConfiguration?.sessionDetails?.systemConfig,
+                                  clientName,
+                                },
+                              },
+                            } as DesktopActivationProfile},
+                          )
+                         await ipcRenderer.invoke('show-toast', message);
+                        }else{
+                          const message = result?.message ?? 'Failed to update client name';
+                         await ipcRenderer.invoke('show-toast', message);
+                        }
+                      }
+                    }}
+                    className="ml-2 w-2/3 rounded-md px-2 py-1 bg-[#232c2e] text-white border border-[#00838f]/30 focus:border-[#00bcd4] focus:outline-none text-sm"
+                    placeholder="Enter client name"
+                  />
+                </div>
+   
+              </div>
+
 
               <div className='mt-4 space-y-2 rounded-lg border border-white/10 bg-[#2a2a2a] p-4'>
                 <p className='text-xs font-semibold uppercase tracking-wide text-[#00bcd4]'>
