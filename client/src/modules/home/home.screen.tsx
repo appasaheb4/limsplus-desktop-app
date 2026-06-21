@@ -626,10 +626,10 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                     </span>
                   </span>
                 </button>
+                {process.env.NODE_ENV === 'development' &&(
                 <button
                   type='button'
                   role='menuitem'
-                  disabled={process.env.NODE_ENV !== 'development'}
                   className='mt-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-gray-200 transition hover:bg-rose-950/40 hover:text-rose-300 focus:bg-rose-950/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-500'
                   onClick={() => void handleSignOut()}
                 >
@@ -656,6 +656,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                     </span>
                   </span>
                 </button>
+                )}
               </div>
             </div>
           )}

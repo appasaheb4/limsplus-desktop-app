@@ -4,6 +4,7 @@ import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import '../home/style.css';
+import { DesktopActivationProfile } from '../license-activation/desktop-activation-profile.types';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -28,6 +29,7 @@ const IntegrationPlatform = observer(() => {
     port: '8080',
     companyCode: '',
     environment: '',
+    environmentList: [] as string[],
     department: '',
     instType: '',
     instId: '',
@@ -73,6 +75,27 @@ const IntegrationPlatform = observer(() => {
       ipcRenderer.removeListener('send-user', onSendUser);
     };
   }, [integrationPlatformStore]);
+
+  useEffect(()=>{
+    const fetchCompanyDetails = async () => {
+    const stored = (await ipcRenderer.invoke(
+      'get-activation-profile',
+    )) as DesktopActivationProfile | null;
+    console.log({stored});
+    if(Object.keys(stored || {}).length > 0){
+      setInputs((prev) => ({
+        ...prev,
+        companyCode: stored?.code as string,
+        environmentList: stored?.environment ? [stored.environment] : [],
+        environment: stored?.environment?.length === 1  ? stored.environment[0] : '',
+      }));
+    }
+    };
+    setTimeout(() => {
+      void fetchCompanyDetails();
+    }, 1000);
+   
+  }, []);
 
   const openMessageModal = () => {
     const modal = document.getElementById('messageModal');
@@ -478,13 +501,27 @@ const IntegrationPlatform = observer(() => {
                   <label htmlFor='environment' className={IG_FIELD_LABEL}>
                     Environment
                   </label>
-                  <input
-                    type='text'
+                  <select
                     id='environment'
-                    disabled
                     value={inputs.environment}
                     className={IG_FIELD_CONTROL}
-                  />
+                    onChange={(e) => {
+                      setInputs({
+                        ...inputs,
+                        environment: e.target.value,
+                        department: '',
+                        instType: '',
+                        instId: '',
+                      });
+                    }}
+                  >
+                    <option value=''>Select</option>
+                    {inputs.environmentList?.map((item: string, index: number) => (
+                      <option key={index} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label htmlFor='department' className={IG_FIELD_LABEL}>

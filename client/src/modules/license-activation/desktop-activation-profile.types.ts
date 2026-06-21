@@ -84,25 +84,25 @@ export function normalizeActivationProfile(
 
   return {
     ...record,
-    name:
-      pickString(record, 'name', 'companyName', 'company_name', 'orgName') ??
-      undefined,
-    code:
-      pickString(record, 'code', 'companyCode', 'company_code') ?? undefined,
-    email: pickString(record, 'email', 'contactEmail', 'mail') ?? undefined,
-    mobile:
-      pickString(
-        record,
-        'mobile',
-        'mobileNo',
-        'mobile_no',
-        'phone',
-        'contactMobile',
-      ) ?? undefined,
-    phone:
-      pickString(record, 'phone', 'mobile', 'mobileNo', 'telephone') ??
-      undefined,
-    environment: pickString(record, 'environment', 'env') ?? undefined,
+    // name:
+    //   pickString(record, 'name', 'companyName', 'company_name', 'orgName') ??
+    //   undefined,
+    // code:
+    //   pickString(record, 'code', 'companyCode', 'company_code') ?? undefined,
+    // email: pickString(record, 'email', 'contactEmail', 'mail') ?? undefined,
+    // mobile:
+    //   pickString(
+    //     record,
+    //     'mobile',
+    //     'mobileNo',
+    //     'mobile_no',
+    //     'phone',
+    //     'contactMobile',
+    //   ) ?? undefined,
+    // phone:
+    //   pickString(record, 'phone', 'mobile', 'mobileNo', 'telephone') ??
+    //   undefined,
+    // environment: pickString(record, 'environment', 'env') ?? undefined,
   };
 }
 

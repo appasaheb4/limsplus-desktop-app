@@ -84,7 +84,7 @@ export default function ActivationKeyGate({ onActivated }: Props) {
         const profile = buildProfileForStorage(
           result.company ?? result,
         );
-        // console.log({profile});
+        // console.log({result, profile});
         const companyCode = extractLocalLoginCompanyCode(profile);
         const savedProfile = (await ipcRenderer.invoke(
           'save-activation-profile',

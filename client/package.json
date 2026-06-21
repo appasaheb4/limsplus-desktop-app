@@ -1,6 +1,6 @@
 {
   "name": "limsplus-connect",
-  "version": "1.0.29",
+  "version": "1.0.32",
   "author": "Lakade Appasaheb",
   "description": "LimsPlus Connect",
   "homepage": ".",
@@ -63,7 +63,7 @@
   },
   "build": {
     "appId": "com.limsplus.connect",
-    "productName": "LIMSPLUS Connect 1.0.29",
+    "productName": "LIMSPLUS Connect 1.0.32",
     "copyright": "Copyright © 2026 LimsPlus",
     "publish": null,
     "extends": null,
@@ -158,7 +158,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LIMSPLUS Connect 1.0.29",
+      "shortcutName": "LIMSPLUS Connect 1.0.32",
       "uninstallDisplayName": "${productName}",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
@@ -167,7 +167,7 @@
       "include": "installer/nsis/installer.nsh"
     },
     "dmg": {
-      "title": "LIMSPLUS Connect 1.0.29",
+      "title": "LIMSPLUS Connect 1.0.32",
       "icon": "assets/icon.icns",
       "artifactName": "${productName}.${ext}",
       "contents": [
