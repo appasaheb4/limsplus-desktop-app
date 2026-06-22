@@ -5,6 +5,12 @@ import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import '../home/style.css';
 import { DesktopActivationProfile } from '../license-activation/desktop-activation-profile.types';
+import { service } from '../../core-services/rest-api';
+import InstrumentLogPreviewModal from './components/instrument-log-preview-modal.component';
+import {
+  parseInstrumentLogFile,
+  type ParsedInstrumentLog,
+} from './helper/parseInstrumentLogFile';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -31,11 +37,18 @@ const IntegrationPlatform = observer(() => {
     environment: '',
     environmentList: [] as string[],
     department: '',
+    departmentList: [] as string[],
     instType: '',
+    instTypeList: [] as string[],
     instId: '',
+    instIdList: [] as string[],
   });
   const [isConnected, setIsConnected] = useState(false);
   const [instrumentDetails, setInstrumentDetails] = useState<Array<any>>([]);
+  const [uploadedLogName, setUploadedLogName] = useState('');
+  const [parsedInstrumentLog, setParsedInstrumentLog] =
+    useState<ParsedInstrumentLog | null>(null);
+  const [logPreviewOpen, setLogPreviewOpen] = useState(false);
 
   function removeOptions(selectElement: any) {
     var i,
@@ -76,12 +89,51 @@ const IntegrationPlatform = observer(() => {
     };
   }, [integrationPlatformStore]);
 
+  const fetchCompanyDetails = async () => {
+    const {companyCode, environment}= inputs;
+    if(companyCode && environment){
+await service.post('/company/companyDetails', {
+  filter: {
+    companyCode: companyCode,
+    environment: environment,
+    fetchDetails:["instrumentMaster"]
+  },
+}).then((response:any) => {
+  if(response.data?.success){
+  const {instrumentMaster} = response.data.result;
+ setInputs((prev) => ({
+  ...prev,
+  departmentList: instrumentMaster?.reduce((acc:any, item:any) => {
+    if(!acc.includes(item.department)){
+      acc.push(item.department);
+    }
+    return acc;
+  }, []),
+  instTypeList: instrumentMaster?.reduce((acc:any, item:any) => {
+    if(!acc.some((e:any) => e.instType === item.instType)){
+      acc.push({department:item.department, instType:item.instType});
+    }
+    return acc;
+  }, []),
+  instIdList: instrumentMaster?.reduce((acc:any, item:any) => {
+    if(!acc.some((e:any) => e.instId === item.instId)){
+      acc.push({department:item.department, instId:item.instId});
+    }
+    return acc;
+  }, []),
+ }));
+  }
+});
+
+    }
+  };
+
   useEffect(()=>{
     const fetchCompanyDetails = async () => {
     const stored = (await ipcRenderer.invoke(
       'get-activation-profile',
     )) as DesktopActivationProfile | null;
-    console.log({stored});
+    // console.log({stored});
     if(Object.keys(stored || {}).length > 0){
       setInputs((prev) => ({
         ...prev,
@@ -89,13 +141,18 @@ const IntegrationPlatform = observer(() => {
         environmentList: stored?.environment ? [stored.environment] : [],
         environment: stored?.environment?.length === 1  ? stored.environment[0] : '',
       }));
+      fetchCompanyDetails();
     }
     };
     setTimeout(() => {
       void fetchCompanyDetails();
     }, 1000);
-   
   }, []);
+
+  useEffect(()=>{
+    fetchCompanyDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs.environment]);
 
   const openMessageModal = () => {
     const modal = document.getElementById('messageModal');
@@ -114,6 +171,28 @@ const IntegrationPlatform = observer(() => {
       modal.classList.add('hidden');
     }
   }
+
+  const handleInstrumentLogUpload = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text =
+        typeof reader.result === 'string' ? reader.result : '';
+      const parsed = parseInstrumentLogFile(text, file.name);
+      setUploadedLogName(file.name);
+      setParsedInstrumentLog(parsed);
+      setLogPreviewOpen(true);
+    };
+    reader.onerror = () => {
+      alert('Could not read the selected file.');
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 
   const statusBadgeClass = (status: string): string => {
     const normalized = status.toLowerCase();
@@ -413,14 +492,21 @@ const IntegrationPlatform = observer(() => {
                   htmlFor='logFileInput'
                   className='mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-gray-400 transition hover:border-[#00bcd4]/40 hover:bg-[#00bcd4]/5 hover:text-[#80deea]'
                 >
-                  <span className='font-medium text-gray-300'>Choose .txt file</span>
-                  <span className='mt-1 text-xs'>Click to browse</span>
+                  <span className='font-medium text-gray-300'>
+                    {uploadedLogName || 'Choose .txt file'}
+                  </span>
+                  <span className='mt-1 text-xs'>
+                    {uploadedLogName
+                      ? 'Click to upload another file'
+                      : 'ASTM instrument log (e.g. instrument-logs.txt)'}
+                  </span>
                 </label>
                 <input
                   type='file'
                   id='logFileInput'
                   accept='.txt'
                   className='hidden'
+                  onChange={handleInstrumentLogUpload}
                 />
               </div>
             </aside>
@@ -532,18 +618,19 @@ const IntegrationPlatform = observer(() => {
                     value={inputs.department}
                     className={IG_FIELD_CONTROL}
                     onChange={(e) => {
+                      const department = e.target.value;
                       setInputs({
                         ...inputs,
-                        department: e.target.value,
+                         department,
                         instType: '',
+                        instTypeList: inputs.instTypeList?.filter((e:any) => e.department === department) ?? [],
                         instId: '',
+                        instIdList: inputs.instIdList?.filter((e:any) => e.department === department) ?? [],
                       });
                     }}
                   >
                     <option value=''>Select</option>
-                    {_.uniq(
-                      instrumentDetails?.map((item) => item.department),
-                    )?.map((item, index) => (
+                    {inputs.departmentList?.map((item, index) => (
                       <option key={index} value={item}>
                         {item}
                       </option>
@@ -560,34 +647,17 @@ const IntegrationPlatform = observer(() => {
                     className={IG_FIELD_CONTROL}
                     onChange={(e) => {
                       const instType = e.target.value;
-                      const items = instrumentDetails.find(
-                        (item) => item.instType == instType,
-                      );
                       setInputs({
                         ...inputs,
                         instType,
-                        instId: items?.instId ?? '',
-                        ip: items?.ipAddress ?? inputs.ip,
-                        port: items?.portNo?.toString() ?? inputs.port,
+                        instId: '',
                       });
                     }}
                   >
                     <option value=''>Select</option>
-                    {_.uniqBy(
-                      instrumentDetails
-                        ?.map((item) => {
-                          if (item.department == inputs.department) {
-                            return {
-                              instId: item.instId,
-                              instType: item.instType,
-                            };
-                          }
-                        })
-                        ?.filter((item) => item),
-                      'instType',
-                    )?.map((item, index) => (
-                      <option key={index} value={item?.instType}>
-                        {item?.instType}
+                    {inputs.instTypeList?.map((item:any, index:number) => (
+                      <option key={index} value={item.instType}>
+                       {item.instType}
                       </option>
                     ))}
                   </select>
@@ -602,34 +672,16 @@ const IntegrationPlatform = observer(() => {
                     className={IG_FIELD_CONTROL}
                     onChange={(e) => {
                       const instId = e.target.value;
-                      const items = instrumentDetails.find(
-                        (item) => item.instId == instId,
-                      );
                       setInputs({
                         ...inputs,
-                        instType: items?.instType ?? '',
                         instId,
-                        ip: items?.ipAddress ?? inputs.ip,
-                        port: items?.portNo?.toString() ?? inputs.port,
                       });
                     }}
                   >
                     <option value=''>Select</option>
-                    {_.uniqBy(
-                      instrumentDetails
-                        ?.map((item) => {
-                          if (item.department == inputs.department) {
-                            return {
-                              instId: item.instId,
-                              instType: item.instType,
-                            };
-                          }
-                        })
-                        .filter((item) => item),
-                      'instId',
-                    )?.map((item, index) => (
-                      <option key={index} value={item?.instId}>
-                        {item?.instId}
+                    {inputs.instIdList?.map((item:any, index:number) => (
+                      <option key={index} value={item.instId}>
+                         {item.instId}
                       </option>
                     ))}
                   </select>
@@ -705,7 +757,6 @@ const IntegrationPlatform = observer(() => {
               </table>
             </div>
           </section>
-
           <div
             id='messageModal'
             className='fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm'
@@ -737,6 +788,12 @@ const IntegrationPlatform = observer(() => {
           </div>
         </div>
       </div>
+
+      <InstrumentLogPreviewModal
+        isOpen={logPreviewOpen}
+        parsed={parsedInstrumentLog}
+        onClose={() => setLogPreviewOpen(false)}
+      />
     </div>
   );
 });
