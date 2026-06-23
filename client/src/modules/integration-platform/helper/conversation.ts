@@ -6,6 +6,7 @@ export const mappingData = async (
 ) => {
   const mapping: any[] = [];
   const values: any[] = [];
+  // console.log({ segmentMapping, interfaceManager });
   for (const item of segmentMapping) {
     if (item.instType === interfaceManager.instrumentType) {
       values.push({
@@ -20,6 +21,7 @@ export const mappingData = async (
       });
     }
   }
+  // console.log({ values });
   const group = values.reduce((r: any, a: any) => {
     r[a.segments] = [...(r[a.segments] || []), a];
     return r;
@@ -41,7 +43,7 @@ export const conversation = async (
 ) => {
   try {
     const mappingList = await mappingData(segmentMapping, interfaceManager);
-
+    // console.log({ mappingList });
     const tempData: any = {};
     for (const item of mappingList) {
       for (const key of Object.keys(item)) {

@@ -27,18 +27,20 @@ export default class Hl7 {
     for (const message of this._message) {
       const values: any = [];
       if (this._config.mapping[message.fields.toLowerCase()]) {
+        const addedFieldNos = new Set<number>();
         for (const value of this._config.mapping[message.fields.toLowerCase()]
           .values) {
           if (value !== undefined && value.field && message instanceof Object) {
-            const index1 = value.component[0];
+            if (!value.mandatory || addedFieldNos.has(value.field_no)) {
+              continue;
+            }
+            addedFieldNos.add(value.field_no);
             const object = this._generateObject(
               value.field,
-              message.values[index1 - 1],
+              message.values[value.field_no - 1],
               value.field_no,
             );
-            if (value.mandatory) {
-              values.push(object);
-            }
+            values.push(object);
           }
         }
         values.sort((a: any, b: any) => {

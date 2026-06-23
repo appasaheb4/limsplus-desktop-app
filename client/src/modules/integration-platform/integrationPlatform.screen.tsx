@@ -7,10 +7,14 @@ import '../home/style.css';
 import { DesktopActivationProfile } from '../license-activation/desktop-activation-profile.types';
 import { service } from '../../core-services/rest-api';
 import InstrumentLogPreviewModal from './components/instrument-log-preview-modal.component';
+import FullscreenLoader from './components/fullscreen-loader.component';
 import {
-  parseInstrumentLogFile,
-  type ParsedInstrumentLog,
-} from './helper/parseInstrumentLogFile';
+  buildConversationMessage,
+  conversation,
+  extractAstmMessageBlocks,
+  formatConversationDecodeResult,
+  type ConversationDecodePreview,
+} from './helper';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -45,10 +49,14 @@ const IntegrationPlatform = observer(() => {
   });
   const [isConnected, setIsConnected] = useState(false);
   const [instrumentDetails, setInstrumentDetails] = useState<Array<any>>([]);
+  const [communicationDetails, setCommunicationDetails] = useState<
+    any
+  >({});
   const [uploadedLogName, setUploadedLogName] = useState('');
-  const [parsedInstrumentLog, setParsedInstrumentLog] =
-    useState<ParsedInstrumentLog | null>(null);
+  const [logDecodePreview, setLogDecodePreview] =
+    useState<ConversationDecodePreview | null>(null);
   const [logPreviewOpen, setLogPreviewOpen] = useState(false);
+  const [logUploadLoading, setLogUploadLoading] = useState(false);
 
   function removeOptions(selectElement: any) {
     var i,
@@ -90,66 +98,97 @@ const IntegrationPlatform = observer(() => {
   }, [integrationPlatformStore]);
 
   const fetchCompanyDetails = async () => {
-    const {companyCode, environment}= inputs;
-    if(companyCode && environment){
-await service.post('/company/companyDetails', {
-  filter: {
-    companyCode: companyCode,
-    environment: environment,
-    fetchDetails:["instrumentMaster"]
-  },
-}).then((response:any) => {
-  if(response.data?.success){
-  const {instrumentMaster} = response.data.result;
- setInputs((prev) => ({
-  ...prev,
-  departmentList: instrumentMaster?.reduce((acc:any, item:any) => {
-    if(!acc.includes(item.department)){
-      acc.push(item.department);
-    }
-    return acc;
-  }, []),
-  instTypeList: instrumentMaster?.reduce((acc:any, item:any) => {
-    if(!acc.some((e:any) => e.instType === item.instType)){
-      acc.push({department:item.department, instType:item.instType});
-    }
-    return acc;
-  }, []),
-  instIdList: instrumentMaster?.reduce((acc:any, item:any) => {
-    if(!acc.some((e:any) => e.instId === item.instId)){
-      acc.push({department:item.department, instId:item.instId});
-    }
-    return acc;
-  }, []),
- }));
-  }
-});
-
+    const { companyCode, environment } = inputs;
+    if (companyCode && environment) {
+      await service
+        .post('/company/companyDetails', {
+          filter: {
+            companyCode: companyCode,
+            environment: environment,
+            fetchDetails: ['instrumentMaster'],
+          },
+        })
+        .then((response: any) => {
+          if (response.data?.success) {
+            const { instrumentMaster } = response.data.result;
+            setInputs((prev) => ({
+              ...prev,
+              departmentList: instrumentMaster?.reduce(
+                (acc: any, item: any) => {
+                  if (!acc.includes(item.department)) {
+                    acc.push(item.department);
+                  }
+                  return acc;
+                },
+                [],
+              ),
+              instTypeList: instrumentMaster?.reduce((acc: any, item: any) => {
+                if (!acc.some((e: any) => e.instType === item.instType)) {
+                  acc.push({
+                    department: item.department,
+                    instType: item.instType,
+                  });
+                }
+                return acc;
+              }, []),
+              instIdList: instrumentMaster?.reduce((acc: any, item: any) => {
+                if (!acc.some((e: any) => e.instId === item.instId)) {
+                  acc.push({
+                    department: item.department,
+                    instId: item.instId,
+                  });
+                }
+                return acc;
+              }, []),
+            }));
+          }
+        });
     }
   };
 
-  useEffect(()=>{
-    const fetchCompanyDetails = async () => {
-    const stored = (await ipcRenderer.invoke(
-      'get-activation-profile',
-    )) as DesktopActivationProfile | null;
-    // console.log({stored});
-    if(Object.keys(stored || {}).length > 0){
-      setInputs((prev) => ({
-        ...prev,
-        companyCode: stored?.code as string,
-        environmentList: stored?.environment ? [stored.environment] : [],
-        environment: stored?.environment?.length === 1  ? stored.environment[0] : '',
-      }));
-      fetchCompanyDetails();
+  const getCommunicationDetails = async (instType: string) => {
+    try {
+      if (instType) {
+        await service
+          .post(`/communication/communicationDetails`, {
+            filter: { condition:{ instType}, fetchDetails:['segmentMapping','interfaceManager'] },
+          })
+          .then((response: any) => {
+            if (response.data?.success) {
+              setCommunicationDetails(response.data.result);
+            } else {
+              alert(response.data.message);
+            }
+          });
+      }
+    } catch (error) {
+      console.error('Error:', error);
     }
+  };
+
+  useEffect(() => {
+    const fetchCompanyDetails = async () => {
+      const stored = (await ipcRenderer.invoke(
+        'get-activation-profile',
+      )) as DesktopActivationProfile | null;
+      // console.log({stored});
+      if (Object.keys(stored || {}).length > 0) {
+        setInputs((prev) => ({
+          ...prev,
+          companyCode: stored?.code as string,
+          environmentList: stored?.environment ? [stored.environment] : [],
+          environment:
+            stored?.environment?.length === 1 ? stored.environment[0] : '',
+        }));
+        fetchCompanyDetails();
+      }
     };
     setTimeout(() => {
       void fetchCompanyDetails();
     }, 1000);
   }, []);
 
-  useEffect(()=>{
+  useEffect(() => {
     fetchCompanyDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputs.environment]);
@@ -172,32 +211,75 @@ await service.post('/company/companyDetails', {
     }
   }
 
-  const handleInstrumentLogUpload = (
+  const handleInstrumentLogUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
 
+    if (communicationDetails.segmentMapping?.length === 0) {
+      alert('Please select an instrument type first');
+      return;
+    }
+
+    const interfaceManager =
+      communicationDetails.interfaceManager?.length > 0
+        ? communicationDetails.interfaceManager[0]
+        : {};
+    const protocol = communicationDetails.segmentMapping[0]?.protocol;
+
+    setLogUploadLoading(true);
+
     const reader = new FileReader();
-    reader.onload = () => {
-      const text =
-        typeof reader.result === 'string' ? reader.result : '';
-      const parsed = parseInstrumentLogFile(text, file.name);
-      setUploadedLogName(file.name);
-      setParsedInstrumentLog(parsed);
-      setLogPreviewOpen(true);
+    reader.onload = async () => {
+      try {
+        const text = typeof reader.result === 'string' ? reader.result : '';
+        const blocks = extractAstmMessageBlocks(text);
+        const segments: ConversationDecodePreview['segments'] = [];
+
+        for (let i = 0; i < blocks.length; i++) {
+          const message = buildConversationMessage(blocks[i], interfaceManager);
+          const result = await conversation(
+            protocol,
+            communicationDetails.segmentMapping,
+            interfaceManager,
+            message,
+          );
+          // console.log({result});
+          segments.push(...formatConversationDecodeResult(result, i + 1));
+        }
+
+        setUploadedLogName(file.name);
+        setLogDecodePreview({
+          fileName: file.name,
+          blockCount: blocks.length,
+          segments,
+          parseError:
+            blocks.length === 0
+              ? 'No ASTM message blocks found. Expected .txt with segments like H|, P|, O|, R|.'
+              : segments.length === 0
+                ? 'No decoded segments. Check instrument type / segment mapping matches this log.'
+                : undefined,
+        });
+        setLogPreviewOpen(true);
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Could not decode the selected log file.');
+      } finally {
+        setLogUploadLoading(false);
+      }
     };
     reader.onerror = () => {
       alert('Could not read the selected file.');
+      setLogUploadLoading(false);
     };
     reader.readAsText(file);
-    event.target.value = '';
   };
 
   const statusBadgeClass = (status: string): string => {
     const normalized = status.toLowerCase();
-    const base =
-      'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ';
+    const base = 'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ';
     if (normalized.includes('error')) {
       return `${base}bg-rose-900/40 text-rose-200`;
     }
@@ -438,7 +520,9 @@ await service.post('/company/companyDetails', {
       <div className='flex min-h-0 flex-1 flex-col overflow-auto bg-[#1a1a1a] p-4 sm:p-6'>
         <div className='mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6'>
           <div className='grid grid-cols-1 gap-6 lg:grid-cols-12'>
-            <aside className={`${IG_PANEL} flex flex-col gap-6 p-5 lg:col-span-3`}>
+            <aside
+              className={`${IG_PANEL} flex flex-col gap-6 p-5 lg:col-span-3`}
+            >
               <div>
                 <p className={IG_FIELD_LABEL}>Connection type</p>
                 <div className='mt-2 space-y-2'>
@@ -484,13 +568,21 @@ await service.post('/company/companyDetails', {
                 </div>
               </div>
 
-              <div>
+              <div
+                className={`${
+                  !inputs.instType
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                    : ''
+                }`}
+              >
                 <label htmlFor='logFileInput' className={IG_FIELD_LABEL}>
                   Upload log
                 </label>
                 <label
                   htmlFor='logFileInput'
-                  className='mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-gray-400 transition hover:border-[#00bcd4]/40 hover:bg-[#00bcd4]/5 hover:text-[#80deea]'
+                  className={`mt-2 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-gray-400 transition
+                  hover:border-[#00bcd4]/40 hover:bg-[#00bcd4]/5 hover:text-[#80deea]
+                  ${!inputs.instType ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <span className='font-medium text-gray-300'>
                     {uploadedLogName || 'Choose .txt file'}
@@ -507,6 +599,7 @@ await service.post('/company/companyDetails', {
                   accept='.txt'
                   className='hidden'
                   onChange={handleInstrumentLogUpload}
+                  disabled={!inputs.instType || logUploadLoading}
                 />
               </div>
             </aside>
@@ -602,11 +695,13 @@ await service.post('/company/companyDetails', {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.environmentList?.map((item: string, index: number) => (
-                      <option key={index} value={item}>
-                        {item}
-                      </option>
-                    ))}
+                    {inputs.environmentList?.map(
+                      (item: string, index: number) => (
+                        <option key={index} value={item}>
+                          {item}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </div>
                 <div>
@@ -621,11 +716,17 @@ await service.post('/company/companyDetails', {
                       const department = e.target.value;
                       setInputs({
                         ...inputs,
-                         department,
+                        department,
                         instType: '',
-                        instTypeList: inputs.instTypeList?.filter((e:any) => e.department === department) ?? [],
+                        instTypeList:
+                          inputs.instTypeList?.filter(
+                            (e: any) => e.department === department,
+                          ) ?? [],
                         instId: '',
-                        instIdList: inputs.instIdList?.filter((e:any) => e.department === department) ?? [],
+                        instIdList:
+                          inputs.instIdList?.filter(
+                            (e: any) => e.department === department,
+                          ) ?? [],
                       });
                     }}
                   >
@@ -645,8 +746,9 @@ await service.post('/company/companyDetails', {
                     id='instrumentType'
                     value={inputs.instType || ''}
                     className={IG_FIELD_CONTROL}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const instType = e.target.value;
+                      await getCommunicationDetails(instType);
                       setInputs({
                         ...inputs,
                         instType,
@@ -655,9 +757,9 @@ await service.post('/company/companyDetails', {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.instTypeList?.map((item:any, index:number) => (
+                    {inputs.instTypeList?.map((item: any, index: number) => (
                       <option key={index} value={item.instType}>
-                       {item.instType}
+                        {item.instType}
                       </option>
                     ))}
                   </select>
@@ -679,9 +781,9 @@ await service.post('/company/companyDetails', {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.instIdList?.map((item:any, index:number) => (
+                    {inputs.instIdList?.map((item: any, index: number) => (
                       <option key={index} value={item.instId}>
-                         {item.instId}
+                        {item.instId}
                       </option>
                     ))}
                   </select>
@@ -708,10 +810,13 @@ await service.post('/company/companyDetails', {
             </section>
           </div>
 
-          <section id='logs-container' className={`${IG_PANEL} overflow-hidden`}>
+          <section
+            id='logs-container'
+            className={`${IG_PANEL} overflow-hidden`}
+          >
             <div className='border-b border-white/10 px-5 py-4 sm:px-6'>
               <h2 className='text-base font-semibold text-white'>
-              Communication log
+                Communication log
               </h2>
               <p className='mt-1 text-sm text-gray-500'>
                 Active instrument sessions and message history.
@@ -791,8 +896,12 @@ await service.post('/company/companyDetails', {
 
       <InstrumentLogPreviewModal
         isOpen={logPreviewOpen}
-        parsed={parsedInstrumentLog}
+        parsed={logDecodePreview}
         onClose={() => setLogPreviewOpen(false)}
+      />
+      <FullscreenLoader
+        show={logUploadLoading}
+        message='Decoding instrument log, please wait...'
       />
     </div>
   );
