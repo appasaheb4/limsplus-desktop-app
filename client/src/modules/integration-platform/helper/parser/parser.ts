@@ -1,5 +1,4 @@
 import { Parser } from '../lib';
-//var parser = require("./lib/index")
 
 export default class Hl7 {
   _message: any;
@@ -27,20 +26,18 @@ export default class Hl7 {
     for (const message of this._message) {
       const values: any = [];
       if (this._config.mapping[message.fields.toLowerCase()]) {
-        const addedFieldNos = new Set<number>();
         for (const value of this._config.mapping[message.fields.toLowerCase()]
           .values) {
           if (value !== undefined && value.field && message instanceof Object) {
-            if (!value.mandatory || addedFieldNos.has(value.field_no)) {
-              continue;
-            }
-            addedFieldNos.add(value.field_no);
+            const index1 = value.component[0];
             const object = this._generateObject(
               value.field,
-              message.values[value.field_no - 1],
+              message.values[index1 - 1],
               value.field_no,
             );
-            values.push(object);
+            if (value.mandatory) {
+              values.push(object);
+            }
           }
         }
         values.sort((a: any, b: any) => {

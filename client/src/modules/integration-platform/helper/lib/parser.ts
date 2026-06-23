@@ -63,6 +63,7 @@ export class Parser {
   };
 
   parse = (data: any) => {
+    //    console.log({ type: this._instrumentType });
     switch (this._instrumentType) {
       case 'ERP':
       case 'ERP_REG': {

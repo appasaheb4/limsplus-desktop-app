@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import _ from 'lodash';
 import { observer } from 'mobx-react';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
@@ -246,7 +245,7 @@ const IntegrationPlatform = observer(() => {
             interfaceManager,
             message,
           );
-          // console.log({result});
+          console.log({result});
           segments.push(...formatConversationDecodeResult(result, i + 1));
         }
 
