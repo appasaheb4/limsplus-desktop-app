@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
+import { Collapsible } from 'react-restyle-components';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import '../home/style.css';
@@ -14,6 +15,7 @@ import {
   formatConversationDecodeResult,
   type ConversationDecodePreview,
 } from './helper';
+import * as Utilities from './utils';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -31,26 +33,59 @@ type User = {
   environment: string;
 };
 
+interface SerialConnectionType {
+  comPort: string;
+  baudRate: number;
+  dataBits: number;
+  stopBits: number;
+  parity: string;
+  flowControl: string;
+  protocol: string;
+  companyCode: '';
+  environment: '';
+  department: '';
+  instType: '';
+  instId: '';
+}
+
 const IntegrationPlatform = observer(() => {
   const { integrationPlatformStore } = useStores();
+  const [connectionType, setConnectionType] = useState<'tcpip' | 'serial'>(
+    'tcpip',
+  );
+  const [commonInstrumentDetails, setCommonInstrumentDetails] = useState({
+    environmentList: [] as string[],
+    departmentList: [] as string[],
+    instTypeList: [] as string[],
+    instIdList: [] as string[],
+  });
   const [inputs, setInputs] = useState({
     ip: '127.0.0.1',
     port: '8080',
     companyCode: '',
     environment: '',
-    environmentList: [] as string[],
     department: '',
-    departmentList: [] as string[],
     instType: '',
-    instTypeList: [] as string[],
     instId: '',
-    instIdList: [] as string[],
   });
+  const [serialConnectionInputs, setSerialConnectionInputs] =
+    useState<SerialConnectionType>({
+      comPort: '',
+      baudRate: 0,
+      dataBits: 0,
+      stopBits: 0,
+      parity: '',
+      flowControl: '',
+      protocol: '',
+      companyCode: '',
+      environment: '',
+      department: '',
+      instType: '',
+      instId: '',
+    });
   const [isConnected, setIsConnected] = useState(false);
   const [instrumentDetails, setInstrumentDetails] = useState<Array<any>>([]);
-  const [communicationDetails, setCommunicationDetails] = useState<
-    any
-  >({});
+  const [communicationDetails, setCommunicationDetails] = useState<any>({});
   const [uploadedLogName, setUploadedLogName] = useState('');
   const [logDecodePreview, setLogDecodePreview] =
     useState<ConversationDecodePreview | null>(null);
@@ -110,7 +145,7 @@ const IntegrationPlatform = observer(() => {
         .then((response: any) => {
           if (response.data?.success) {
             const { instrumentMaster } = response.data.result;
-            setInputs((prev) => ({
+            setCommonInstrumentDetails((prev) => ({
               ...prev,
               departmentList: instrumentMaster?.reduce(
                 (acc: any, item: any) => {
@@ -150,7 +185,10 @@ const IntegrationPlatform = observer(() => {
       if (instType) {
         await service
           .post(`/communication/communicationDetails`, {
-            filter: { condition:{ instType}, fetchDetails:['segmentMapping','interfaceManager'] },
+            filter: {
+              condition: { instType },
+              fetchDetails: ['segmentMapping', 'interfaceManager'],
+            },
           })
           .then((response: any) => {
             if (response.data?.success) {
@@ -175,9 +213,12 @@ const IntegrationPlatform = observer(() => {
         setInputs((prev) => ({
           ...prev,
           companyCode: stored?.code as string,
-          environmentList: stored?.environment ? [stored.environment] : [],
           environment:
             stored?.environment?.length === 1 ? stored.environment[0] : '',
+        }));
+        setCommonInstrumentDetails((prev) => ({
+          ...prev,
+          environmentList: stored?.environment ? [stored.environment] : [],
         }));
         fetchCompanyDetails();
       }
@@ -245,7 +286,7 @@ const IntegrationPlatform = observer(() => {
             interfaceManager,
             message,
           );
-          console.log({result});
+          console.log({ result });
           segments.push(...formatConversationDecodeResult(result, i + 1));
         }
 
@@ -532,6 +573,7 @@ const IntegrationPlatform = observer(() => {
                       id='tcpip'
                       defaultChecked
                       className='h-4 w-4 accent-[#00bcd4]'
+                      onChange={() => setConnectionType('tcpip')}
                     />
                     <span>TCP/IP</span>
                   </label>
@@ -541,6 +583,7 @@ const IntegrationPlatform = observer(() => {
                       name='type'
                       id='serial'
                       className='h-4 w-4 accent-[#00bcd4]'
+                      onChange={() => setConnectionType('serial')}
                     />
                     <span>Serial</span>
                   </label>
@@ -633,36 +676,216 @@ const IntegrationPlatform = observer(() => {
                 className='active grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'
                 id='tcpip-settings'
               >
-                <div>
-                  <label htmlFor='ip' className={IG_FIELD_LABEL}>
-                    IP address
-                  </label>
-                  <input
-                    type='text'
-                    id='ip'
-                    value={inputs.ip}
-                    className={IG_FIELD_CONTROL}
-                    placeholder='127.0.0.1'
-                    onChange={(e) => {
-                      setInputs({ ...inputs, ip: e.target.value });
-                    }}
-                  />
-                </div>
-                <div>
-                  <label htmlFor='tcpPort' className={IG_FIELD_LABEL}>
-                    Port
-                  </label>
-                  <input
-                    type='text'
-                    id='tcpPort'
-                    value={inputs.port}
-                    className={IG_FIELD_CONTROL}
-                    placeholder='8080'
-                    onChange={(e) => {
-                      setInputs({ ...inputs, port: e.target.value });
-                    }}
-                  />
-                </div>
+                {connectionType === 'tcpip' && (
+                  <Collapsible
+                    // label='System Config'
+                    label=''
+                    onCollapse={() => {}}
+                    onExpand={() => {}}
+                  >
+                    <div className='grid grid-cols-2 gap-3'>
+                      <div key={`systemConfig-1`}>
+                        <div>
+                          <label htmlFor='ip' className={IG_FIELD_LABEL}>
+                            IP address
+                          </label>
+                          <input
+                            type='text'
+                            id='ip'
+                            value={inputs.ip}
+                            className={IG_FIELD_CONTROL}
+                            placeholder='127.0.0.1'
+                            onChange={(e) => {
+                              setInputs({ ...inputs, ip: e.target.value });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor='tcpPort' className={IG_FIELD_LABEL}>
+                            Port
+                          </label>
+                          <input
+                            type='text'
+                            id='tcpPort'
+                            value={inputs.port}
+                            className={IG_FIELD_CONTROL}
+                            placeholder='8080'
+                            onChange={(e) => {
+                              setInputs({ ...inputs, port: e.target.value });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Collapsible>
+                )}
+                {connectionType === 'serial' && (
+                  <>
+                    <div>
+                      <label htmlFor='comPort' className={IG_FIELD_LABEL}>
+                        COM Port
+                      </label>
+                      <select
+                        id='comPort'
+                        value={serialConnectionInputs.comPort}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            comPort: e.target.value,
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.comPort.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='baudRate' className={IG_FIELD_LABEL}>
+                        Baud Rate
+                      </label>
+                      <select
+                        id='baudRate'
+                        value={serialConnectionInputs.baudRate}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            baudRate: parseInt(e.target.value),
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.baudRate.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='dataBits' className={IG_FIELD_LABEL}>
+                        Data Bits
+                      </label>
+                      <select
+                        id='dataBits'
+                        value={serialConnectionInputs.dataBits}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            dataBits: parseInt(e.target.value),
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.dataBits.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='stopBits' className={IG_FIELD_LABEL}>
+                        Stop Bits
+                      </label>
+                      <select
+                        id='stopBits'
+                        value={serialConnectionInputs.stopBits}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            stopBits: parseInt(e.target.value),
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.stopBits.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='parity' className={IG_FIELD_LABEL}>
+                        Parity
+                      </label>
+                      <select
+                        id='parity'
+                        value={serialConnectionInputs.parity}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            parity: e.target.value,
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.parity.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='flowControl' className={IG_FIELD_LABEL}>
+                        Flow Control
+                      </label>
+                      <select
+                        id='flowControl'
+                        value={serialConnectionInputs.flowControl}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            flowControl: e.target.value,
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.flowControl.map(
+                          (item: any, index: number) => (
+                            <option key={index} value={item.title}>
+                              {item.title}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor='protocol' className={IG_FIELD_LABEL}>
+                        Protocol
+                      </label>
+                      <select
+                        id='protocol'
+                        value={serialConnectionInputs.protocol}
+                        className={IG_FIELD_CONTROL}
+                        onChange={(e) => {
+                          setSerialConnectionInputs({
+                            ...serialConnectionInputs,
+                            protocol: e.target.value,
+                          });
+                        }}
+                      >
+                        <option value=''>Select</option>
+                        {Utilities.protocol.map((item: any, index: number) => (
+                          <option key={index} value={item.title}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
                 <div>
                   <label htmlFor='companyCode' className={IG_FIELD_LABEL}>
                     Company code
@@ -694,7 +917,7 @@ const IntegrationPlatform = observer(() => {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.environmentList?.map(
+                    {commonInstrumentDetails.environmentList?.map(
                       (item: string, index: number) => (
                         <option key={index} value={item}>
                           {item}
@@ -717,24 +940,29 @@ const IntegrationPlatform = observer(() => {
                         ...inputs,
                         department,
                         instType: '',
-                        instTypeList:
-                          inputs.instTypeList?.filter(
-                            (e: any) => e.department === department,
-                          ) ?? [],
                         instId: '',
-                        instIdList:
-                          inputs.instIdList?.filter(
+                      });
+                      setCommonInstrumentDetails((prev) => ({
+                        ...prev,
+                        instTypeList:
+                          commonInstrumentDetails.instTypeList?.filter(
                             (e: any) => e.department === department,
                           ) ?? [],
-                      });
+                        instIdList:
+                          commonInstrumentDetails.instIdList?.filter(
+                            (e: any) => e.department === department,
+                          ) ?? [],
+                      }));
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.departmentList?.map((item, index) => (
-                      <option key={index} value={item}>
-                        {item}
-                      </option>
-                    ))}
+                    {commonInstrumentDetails.departmentList?.map(
+                      (item: string, index: number) => (
+                        <option key={index} value={item}>
+                          {item}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </div>
                 <div>
@@ -756,11 +984,13 @@ const IntegrationPlatform = observer(() => {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.instTypeList?.map((item: any, index: number) => (
-                      <option key={index} value={item.instType}>
-                        {item.instType}
-                      </option>
-                    ))}
+                    {commonInstrumentDetails.instTypeList?.map(
+                      (item: any, index: number) => (
+                        <option key={index} value={item.instType}>
+                          {item.instType}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </div>
                 <div>
@@ -780,11 +1010,13 @@ const IntegrationPlatform = observer(() => {
                     }}
                   >
                     <option value=''>Select</option>
-                    {inputs.instIdList?.map((item: any, index: number) => (
-                      <option key={index} value={item.instId}>
-                        {item.instId}
-                      </option>
-                    ))}
+                    {commonInstrumentDetails.instIdList?.map(
+                      (item: any, index: number) => (
+                        <option key={index} value={item.instId}>
+                          {item.instId}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </div>
               </div>

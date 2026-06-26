@@ -55,6 +55,7 @@
     "mongodb-memory-server": "^11.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-restyle-components": "^0.4.76",
     "react-router-dom": "^7.1.2",
     "react-scripts": "5.0.1",
     "serve-handler": "^6.1.5",
