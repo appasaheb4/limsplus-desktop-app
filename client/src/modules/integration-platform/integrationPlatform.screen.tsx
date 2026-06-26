@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
-import { Collapsible } from 'react-restyle-components';
+import { Collapsible, Icon } from 'react-restyle-components';
 import { useStores } from '../../stores';
 import { IpcRendererEvent } from 'electron';
 import '../home/style.css';
@@ -16,6 +16,7 @@ import {
   type ConversationDecodePreview,
 } from './helper';
 import * as Utilities from './utils';
+import CommonInstrumentConnectionComponent from './components/common-instrument-connection.component';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -48,26 +49,47 @@ interface SerialConnectionType {
   instId: '';
 }
 
+interface TcpipConnectionInputs {
+  ip: string;
+  port: string;
+  companyCode: string;
+  environment: string;
+  department: string;
+  instType: string;
+  instId: string;
+}
+export interface CommonInstrumentDetails {
+  environmentList: string[];
+  departmentList: string[];
+  instTypeList: string[];
+  instIdList: string[];
+}
+
 const IntegrationPlatform = observer(() => {
   const { integrationPlatformStore } = useStores();
   const [connectionType, setConnectionType] = useState<'tcpip' | 'serial'>(
     'tcpip',
   );
-  const [commonInstrumentDetails, setCommonInstrumentDetails] = useState({
-    environmentList: [] as string[],
-    departmentList: [] as string[],
-    instTypeList: [] as string[],
-    instIdList: [] as string[],
-  });
-  const [inputs, setInputs] = useState({
-    ip: '127.0.0.1',
-    port: '8080',
-    companyCode: '',
-    environment: '',
-    department: '',
-    instType: '',
-    instId: '',
-  });
+  const [commonInstrumentDetails, setCommonInstrumentDetails] =
+    useState<CommonInstrumentDetails>({
+      environmentList: [] as string[],
+      departmentList: [] as string[],
+      instTypeList: [] as string[],
+      instIdList: [] as string[],
+    });
+  const [tcpIpConnectionInputs, setTcpIpConnectionInputs] = useState<
+    TcpipConnectionInputs[]
+  >([
+    {
+      ip: '127.0.0.1',
+      port: '8080',
+      companyCode: '',
+      environment: '',
+      department: '',
+      instType: '',
+      instId: '',
+    },
+  ]);
   const [serialConnectionInputs, setSerialConnectionInputs] =
     useState<SerialConnectionType>({
       comPort: '',
@@ -91,22 +113,15 @@ const IntegrationPlatform = observer(() => {
     useState<ConversationDecodePreview | null>(null);
   const [logPreviewOpen, setLogPreviewOpen] = useState(false);
   const [logUploadLoading, setLogUploadLoading] = useState(false);
-
-  function removeOptions(selectElement: any) {
-    var i,
-      L = selectElement.options.length - 1;
-    for (i = L; i >= 1; i--) {
-      selectElement.remove(i);
-    }
-  }
+  const [canUsePlusButton, setCanUsePlusButton] = useState(true);
 
   useEffect(() => {
     const onSendUser = (_event: IpcRendererEvent, user: User) => {
-      setInputs((prev) => ({
-        ...prev,
-        companyCode: user.companyCode,
-        environment: user.environment ?? prev.environment,
-      }));
+      // setTcpIpConnectionInputs((prev: TcpipConnectionInputs[]) => ({
+      //   ...prev,
+      //   companyCode: user.companyCode,
+      //   environment: user.environment,
+      // }));
       integrationPlatformStore.integrationPlatformService
         .findByFieldsInstrumentMaster({
           input: { filter: { companyCode: user.companyCode } },
@@ -122,7 +137,6 @@ const IntegrationPlatform = observer(() => {
           console.error('Error:', error);
         });
     };
-
     ipcRenderer.invoke('read-user');
     ipcRenderer.on('send-user', onSendUser);
     ipcRenderer.send('set-title', 'INTEGRATION PLATFORM');
@@ -132,7 +146,7 @@ const IntegrationPlatform = observer(() => {
   }, [integrationPlatformStore]);
 
   const fetchCompanyDetails = async () => {
-    const { companyCode, environment } = inputs;
+    const { companyCode, environment } = tcpIpConnectionInputs[0];
     if (companyCode && environment) {
       await service
         .post('/company/companyDetails', {
@@ -180,29 +194,6 @@ const IntegrationPlatform = observer(() => {
     }
   };
 
-  const getCommunicationDetails = async (instType: string) => {
-    try {
-      if (instType) {
-        await service
-          .post(`/communication/communicationDetails`, {
-            filter: {
-              condition: { instType },
-              fetchDetails: ['segmentMapping', 'interfaceManager'],
-            },
-          })
-          .then((response: any) => {
-            if (response.data?.success) {
-              setCommunicationDetails(response.data.result);
-            } else {
-              alert(response.data.message);
-            }
-          });
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
   useEffect(() => {
     const fetchCompanyDetails = async () => {
       const stored = (await ipcRenderer.invoke(
@@ -210,12 +201,14 @@ const IntegrationPlatform = observer(() => {
       )) as DesktopActivationProfile | null;
       // console.log({stored});
       if (Object.keys(stored || {}).length > 0) {
-        setInputs((prev) => ({
-          ...prev,
-          companyCode: stored?.code as string,
-          environment:
-            stored?.environment?.length === 1 ? stored.environment[0] : '',
-        }));
+        setTcpIpConnectionInputs([
+          ...tcpIpConnectionInputs.map((input) => ({
+            ...input,
+            companyCode: stored?.code as string,
+            environment:
+              stored?.environment?.length === 1 ? stored.environment[0] : '',
+          })),
+        ]);
         setCommonInstrumentDetails((prev) => ({
           ...prev,
           environmentList: stored?.environment ? [stored.environment] : [],
@@ -231,7 +224,7 @@ const IntegrationPlatform = observer(() => {
   useEffect(() => {
     fetchCompanyDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputs.environment]);
+  }, [tcpIpConnectionInputs[0].environment]);
 
   const openMessageModal = () => {
     const modal = document.getElementById('messageModal');
@@ -335,15 +328,15 @@ const IntegrationPlatform = observer(() => {
     return `${base}bg-amber-900/40 text-amber-200`;
   };
 
-  const updateRowStatus = (status: string) => {
-    const statusCell = document.getElementById(
-      `status-${inputs.ip}-${inputs.port}`,
-    );
-    if (statusCell) {
-      statusCell.innerHTML = `<span class="${statusBadgeClass(status)}">${status}</span>`;
-    } else {
-      console.error('Status cell not found for the given IP and Port');
-    }
+  const updateRowStatus = (status: string, index: number) => {
+    tcpIpConnectionInputs.forEach((input, index) => {
+      const statusCell = document.getElementById(
+        `status-${tcpIpConnectionInputs[index].ip}-${tcpIpConnectionInputs[index].port}`,
+      );
+      if (statusCell) {
+        statusCell.innerHTML = `<span class="${statusBadgeClass(status)}">${status}</span>`;
+      }
+    });
   };
 
   function appendLog(message: string) {
@@ -371,8 +364,8 @@ const IntegrationPlatform = observer(() => {
           'ws-connected',
           (_event: IpcRendererEvent, message: string) => {
             appendLog(`WebSocket Connected: ${message}`);
-            updateRowStatus('Connected');
-            ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
+            updateRowStatus('Connected', 0);
+            //ipcRenderer.invoke('start-server', inputs.ip, inputs.port);
           },
         );
 
@@ -429,7 +422,7 @@ const IntegrationPlatform = observer(() => {
           'ws-disconnected',
           (_event: IpcRendererEvent, message: string) => {
             appendLog(`WebSocket Disconnected: ${message}`);
-            updateRowStatus('Disconnected');
+            updateRowStatus('Disconnected', 0);
             setIsConnected(false);
           },
         );
@@ -438,16 +431,16 @@ const IntegrationPlatform = observer(() => {
           'ws-error',
           (_event: IpcRendererEvent, error: string) => {
             appendLog(`WebSocket Error: ${error}`);
-            updateRowStatus('Error');
+            updateRowStatus('Error', 0);
           },
         );
 
         await ipcRenderer.invoke('connect-ws');
         setIsConnected(true);
-        updateRowStatus('Connecting...');
+        updateRowStatus('Connecting...', 0);
       } catch (error: any) {
         appendLog(`Error: ${error.message || 'Unknown error'}`);
-        updateRowStatus('Error');
+        updateRowStatus('Error', 0);
       }
     }
   };
@@ -461,26 +454,26 @@ const IntegrationPlatform = observer(() => {
       ipcRenderer.removeAllListeners('ws-disconnected');
       ipcRenderer.removeAllListeners('ws-error');
 
-      await ipcRenderer.invoke('disconnect-ws', inputs.ip, inputs.port);
+      //await ipcRenderer.invoke('disconnect-ws', inputs.ip, inputs.port);
       appendLog('Disconnected successfully');
       setIsConnected(false);
-      updateRowStatus('Disconnected');
+      updateRowStatus('Disconnected', 0);
     } catch (error: any) {
       console.error('Disconnection Error:', error);
       appendLog(`Error: ${error.message || 'Unknown error'}`);
-      updateRowStatus('Error');
+      updateRowStatus('Error', 0);
     }
   };
 
   const validateInputs = () => {
-    const missingFields = [];
-    if (!inputs.ip) missingFields.push('IP Address');
-    if (!inputs.port) missingFields.push('Port');
-    if (!inputs.companyCode) missingFields.push('Company Code');
-    if (!inputs.environment) missingFields.push('Environment');
-    if (!inputs.department) missingFields.push('Department');
-    if (!inputs.instType) missingFields.push('Instrument Type');
-    if (!inputs.instId) missingFields.push('Instrument ID');
+    const missingFields: string[] = [];
+    // if (!inputs.ip) missingFields.push('IP Address');
+    // if (!inputs.port) missingFields.push('Port');
+    // if (!inputs.companyCode) missingFields.push('Company Code');
+    // if (!inputs.environment) missingFields.push('Environment');
+    // if (!inputs.department) missingFields.push('Department');
+    // if (!inputs.instType) missingFields.push('Instrument Type');
+    // if (!inputs.instId) missingFields.push('Instrument ID');
 
     if (missingFields.length > 0) {
       alert(
@@ -495,8 +488,8 @@ const IntegrationPlatform = observer(() => {
     const existingRow = Array.from(tableBody.children).find((row) => {
       const cells = row.getElementsByTagName('td');
       return (
-        cells[0].textContent === inputs.ip &&
-        cells[1].textContent === inputs.port
+        cells[0].textContent === tcpIpConnectionInputs[0].ip &&
+        cells[1].textContent === tcpIpConnectionInputs[0].port
       );
     });
 
@@ -506,14 +499,15 @@ const IntegrationPlatform = observer(() => {
       const now = new Date();
       const currentTime = now.toLocaleTimeString();
 
-      newRow.innerHTML = `
-        <td class="${IG_TABLE_CELL} font-mono text-[#80deea]">${inputs?.ip}</td>
-        <td class="${IG_TABLE_CELL} font-mono">${inputs.port}</td>
-        <td class="${IG_TABLE_CELL}">${inputs.companyCode}</td>
-        <td class="${IG_TABLE_CELL}">${inputs.environment}</td>
-        <td class="${IG_TABLE_CELL}">${inputs.instType}</td>
-        <td class="${IG_TABLE_CELL}">${inputs.instId}</td>
-        <td class="${IG_TABLE_CELL}" id="status-${inputs.ip}-${inputs.port}">
+      tcpIpConnectionInputs.forEach((input, index) => {
+        newRow.innerHTML += `
+          <td class="${IG_TABLE_CELL} font-mono text-[#80deea]">${input.ip}</td>
+          <td class="${IG_TABLE_CELL} font-mono">${input.port}</td>
+          <td class="${IG_TABLE_CELL}">${input.companyCode}</td>
+          <td class="${IG_TABLE_CELL}">${input.environment}</td>
+          <td class="${IG_TABLE_CELL}">${input.instType}</td>
+          <td class="${IG_TABLE_CELL}">${input.instId}</td>
+           <td class="${IG_TABLE_CELL}" id="status-${input.ip}-${input.port}">
           <span class="inline-flex rounded-full bg-amber-900/40 px-2.5 py-0.5 text-xs font-medium text-amber-200">Connecting…</span>
         </td>
         <td class="${IG_TABLE_CELL} text-center">
@@ -522,7 +516,8 @@ const IntegrationPlatform = observer(() => {
           </button>
         </td>
         <td class="${IG_TABLE_CELL} text-center tabular-nums text-gray-400">${currentTime}</td>
-      `;
+        `;
+      });
 
       const toggleModalIcon = newRow.querySelector('#toggleModalIcon');
       if (toggleModalIcon) {
@@ -612,7 +607,7 @@ const IntegrationPlatform = observer(() => {
 
               <div
                 className={`${
-                  !inputs.instType
+                  !tcpIpConnectionInputs[0].instType
                     ? 'opacity-50 cursor-not-allowed pointer-events-none'
                     : ''
                 }`}
@@ -624,7 +619,7 @@ const IntegrationPlatform = observer(() => {
                   htmlFor='logFileInput'
                   className={`mt-2 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/15 bg-black/20 px-4 py-8 text-center text-sm text-gray-400 transition
                   hover:border-[#00bcd4]/40 hover:bg-[#00bcd4]/5 hover:text-[#80deea]
-                  ${!inputs.instType ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  ${!tcpIpConnectionInputs[0].instType ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <span className='font-medium text-gray-300'>
                     {uploadedLogName || 'Choose .txt file'}
@@ -641,7 +636,9 @@ const IntegrationPlatform = observer(() => {
                   accept='.txt'
                   className='hidden'
                   onChange={handleInstrumentLogUpload}
-                  disabled={!inputs.instType || logUploadLoading}
+                  disabled={
+                    !tcpIpConnectionInputs[0].instType || logUploadLoading
+                  }
                 />
               </div>
             </aside>
@@ -672,55 +669,105 @@ const IntegrationPlatform = observer(() => {
                 </span>
               </div>
 
-              <div
-                className='active grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'
-                id='tcpip-settings'
-              >
+              <div className='flex flex-col gap-4' id='tcpip-settings'>
                 {connectionType === 'tcpip' && (
-                  <Collapsible
-                    // label='System Config'
-                    label=''
-                    onCollapse={() => {}}
-                    onExpand={() => {}}
-                  >
-                    <div className='grid grid-cols-2 gap-3'>
-                      <div key={`systemConfig-1`}>
+                  <>
+                    {tcpIpConnectionInputs.map((input, index) => (
+                      <Collapsible
+                        label={`Instrument ${index + 1}`}
+                        onCollapse={() => {}}
+                        onExpand={() => {}}
+                        styles={{
+                          container: {
+                            backgroundColor: 'transparent',
+                          },
+                          button: {
+                            backgroundColor: 'transparent',
+                            color: '#ffffff',
+                          },
+                          content: {
+                            backgroundColor: 'transparent',
+                          },
+                        }}
+                      >
                         <div>
-                          <label htmlFor='ip' className={IG_FIELD_LABEL}>
-                            IP address
-                          </label>
-                          <input
-                            type='text'
-                            id='ip'
-                            value={inputs.ip}
-                            className={IG_FIELD_CONTROL}
-                            placeholder='127.0.0.1'
-                            onChange={(e) => {
-                              setInputs({ ...inputs, ip: e.target.value });
-                            }}
-                          />
+                          <div key={index} className='grid grid-cols-4 gap-4'>
+                            <div>
+                              <label htmlFor='ip' className={IG_FIELD_LABEL}>
+                                IP address
+                              </label>
+                              <input
+                                type='text'
+                                id='ip'
+                                value={input.ip}
+                                className={IG_FIELD_CONTROL}
+                                placeholder='127.0.0.1'
+                                onChange={(e) => {
+                                  setTcpIpConnectionInputs(
+                                    (prev: TcpipConnectionInputs[]) => [
+                                      ...prev.slice(0, index),
+                                      { ...input, ip: e.target.value },
+                                      ...prev.slice(index + 1),
+                                    ],
+                                  );
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label
+                                htmlFor='tcpPort'
+                                className={IG_FIELD_LABEL}
+                              >
+                                Port
+                              </label>
+                              <input
+                                type='text'
+                                id='tcpPort'
+                                value={input.port}
+                                className={IG_FIELD_CONTROL}
+                                placeholder='8080'
+                                onChange={(e) => {
+                                  setTcpIpConnectionInputs(
+                                    (prev: TcpipConnectionInputs[]) => [
+                                      ...prev.slice(0, index),
+                                      { ...input, port: e.target.value },
+                                      ...prev.slice(index + 1),
+                                    ],
+                                  );
+                                }}
+                              />
+                            </div>
+                            <CommonInstrumentConnectionComponent
+                              inputs={tcpIpConnectionInputs[index]}
+                              onChange={(inputs: any) => {
+                                setTcpIpConnectionInputs(
+                                  (prev: TcpipConnectionInputs[]) => [
+                                    ...prev.slice(0, index),
+                                    inputs,
+                                    ...prev.slice(index + 1),
+                                  ],
+                                );
+                              }}
+                              commonInstrumentDetails={commonInstrumentDetails}
+                              onCommonInstrumentDetailsChange={(
+                                commonInstrumentDetails: CommonInstrumentDetails,
+                              ) =>
+                                setCommonInstrumentDetails(
+                                  commonInstrumentDetails,
+                                )
+                              }
+                              onCommunicationDetailsChange={(details: any) =>
+                                setCommunicationDetails(details)
+                              }
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label htmlFor='tcpPort' className={IG_FIELD_LABEL}>
-                            Port
-                          </label>
-                          <input
-                            type='text'
-                            id='tcpPort'
-                            value={inputs.port}
-                            className={IG_FIELD_CONTROL}
-                            placeholder='8080'
-                            onChange={(e) => {
-                              setInputs({ ...inputs, port: e.target.value });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </Collapsible>
+                      </Collapsible>
+                    ))}
+                  </>
                 )}
                 {connectionType === 'serial' && (
-                  <>
+                  <div className='grid grid-cols-4 gap-4'>
                     <div>
                       <label htmlFor='comPort' className={IG_FIELD_LABEL}>
                         COM Port
@@ -884,144 +931,53 @@ const IntegrationPlatform = observer(() => {
                         ))}
                       </select>
                     </div>
-                  </>
+                    <CommonInstrumentConnectionComponent
+                      inputs={serialConnectionInputs}
+                      onChange={(inputs: any) =>
+                        setSerialConnectionInputs(inputs)
+                      }
+                      commonInstrumentDetails={commonInstrumentDetails}
+                      onCommonInstrumentDetailsChange={(
+                        commonInstrumentDetails: CommonInstrumentDetails,
+                      ) => setCommonInstrumentDetails(commonInstrumentDetails)}
+                      onCommunicationDetailsChange={(details: any) =>
+                        setCommunicationDetails(details)
+                      }
+                    />
+                  </div>
                 )}
-                <div>
-                  <label htmlFor='companyCode' className={IG_FIELD_LABEL}>
-                    Company code
-                  </label>
-                  <input
-                    type='text'
-                    id='companyCode'
-                    disabled
-                    value={inputs.companyCode}
-                    className={IG_FIELD_CONTROL}
-                  />
-                </div>
-                <div>
-                  <label htmlFor='environment' className={IG_FIELD_LABEL}>
-                    Environment
-                  </label>
-                  <select
-                    id='environment'
-                    value={inputs.environment}
-                    className={IG_FIELD_CONTROL}
-                    onChange={(e) => {
-                      setInputs({
-                        ...inputs,
-                        environment: e.target.value,
+              </div>
+              <div className='mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-5'>
+                <button
+                  type='button'
+                  disabled={!canUsePlusButton}
+                  title={'Add another instrument'}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                    canUsePlusButton
+                      ? 'border-indigo-500 bg-indigo-500 text-white shadow-md hover:bg-indigo-600 hover:shadow-lg animate-pulse cursor-pointer'
+                      : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                  }`}
+                  onClick={() => {
+                    setTcpIpConnectionInputs([
+                      ...tcpIpConnectionInputs,
+                      {
+                        ip: '',
+                        port: '',
+                        companyCode: '',
+                        environment: '',
                         department: '',
                         instType: '',
                         instId: '',
-                      });
-                    }}
-                  >
-                    <option value=''>Select</option>
-                    {commonInstrumentDetails.environmentList?.map(
-                      (item: string, index: number) => (
-                        <option key={index} value={item}>
-                          {item}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor='department' className={IG_FIELD_LABEL}>
-                    Department
-                  </label>
-                  <select
-                    id='department'
-                    value={inputs.department}
-                    className={IG_FIELD_CONTROL}
-                    onChange={(e) => {
-                      const department = e.target.value;
-                      setInputs({
-                        ...inputs,
-                        department,
-                        instType: '',
-                        instId: '',
-                      });
-                      setCommonInstrumentDetails((prev) => ({
-                        ...prev,
-                        instTypeList:
-                          commonInstrumentDetails.instTypeList?.filter(
-                            (e: any) => e.department === department,
-                          ) ?? [],
-                        instIdList:
-                          commonInstrumentDetails.instIdList?.filter(
-                            (e: any) => e.department === department,
-                          ) ?? [],
-                      }));
-                    }}
-                  >
-                    <option value=''>Select</option>
-                    {commonInstrumentDetails.departmentList?.map(
-                      (item: string, index: number) => (
-                        <option key={index} value={item}>
-                          {item}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor='instrumentType' className={IG_FIELD_LABEL}>
-                    Instrument type
-                  </label>
-                  <select
-                    id='instrumentType'
-                    value={inputs.instType || ''}
-                    className={IG_FIELD_CONTROL}
-                    onChange={async (e) => {
-                      const instType = e.target.value;
-                      await getCommunicationDetails(instType);
-                      setInputs({
-                        ...inputs,
-                        instType,
-                        instId: '',
-                      });
-                    }}
-                  >
-                    <option value=''>Select</option>
-                    {commonInstrumentDetails.instTypeList?.map(
-                      (item: any, index: number) => (
-                        <option key={index} value={item.instType}>
-                          {item.instType}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor='instrumentId' className={IG_FIELD_LABEL}>
-                    Instrument ID
-                  </label>
-                  <select
-                    id='instrumentId'
-                    value={inputs.instId || ''}
-                    className={IG_FIELD_CONTROL}
-                    onChange={(e) => {
-                      const instId = e.target.value;
-                      setInputs({
-                        ...inputs,
-                        instId,
-                      });
-                    }}
-                  >
-                    <option value=''>Select</option>
-                    {commonInstrumentDetails.instIdList?.map(
-                      (item: any, index: number) => (
-                        <option key={index} value={item.instId}>
-                          {item.instId}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              <div className='mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-5'>
+                      },
+                    ]);
+                    // setCanUsePlusButton(false);
+                  }}
+                >
+                  <Icon
+                    nameIcon='FaPlus'
+                    propsIcon={{ size: 16, color: 'currentColor' }}
+                  />
+                </button>
                 <button
                   id='connectButton'
                   type='button'
