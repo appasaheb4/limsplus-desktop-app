@@ -5,8 +5,10 @@
 /client/node_modules
 /client/build
 /client/dist
+/client/database/*
 /client/assets/install-identity.json
 /server/dist
 /server/build
 /server/server.spec
 /server/__pycache__
+
