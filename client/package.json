@@ -1,6 +1,6 @@
 {
   "name": "limsplus-connect",
-  "version": "1.0.33",
+  "version": "1.0.38",
   "author": "Lakade Appasaheb",
   "description": "LimsPlus Connect",
   "homepage": ".",
@@ -8,9 +8,9 @@
   "private": true,
   "scripts": {
     "build:server": "node build-server.js",
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "craco start",
+    "build": "craco build",
+    "test": "craco test",
     "postinstall": "electron-builder install-app-deps",
     "dev": "concurrently \"cross-env BROWSER=none yarn start\" \"wait-on http://127.0.0.1:3000 && tsc -p electron -w\" \"wait-on http://127.0.0.1:3000 && tsc -p electron && cross-env LIMSPLUS_CONNECT_DEV_URL=http://127.0.0.1:3000 NODE_OPTIONS= electron .\"",
     "dev:with-devtools": "cross-env LIMSPLUS_OPEN_DEVTOOLS=true yarn dev",
@@ -64,7 +64,7 @@
   },
   "build": {
     "appId": "com.limsplus.connect",
-    "productName": "LIMSPLUS Connect 1.0.33",
+    "productName": "LIMSPLUS Connect 1.0.38",
     "copyright": "Copyright © 2026 LimsPlus",
     "publish": null,
     "extends": null,
@@ -159,7 +159,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LIMSPLUS Connect 1.0.33",
+      "shortcutName": "LIMSPLUS Connect 1.0.38",
       "uninstallDisplayName": "${productName}",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
@@ -168,7 +168,7 @@
       "include": "installer/nsis/installer.nsh"
     },
     "dmg": {
-      "title": "LIMSPLUS Connect 1.0.33",
+      "title": "LIMSPLUS Connect 1.0.38",
       "icon": "assets/icon.icns",
       "artifactName": "${productName}.${ext}",
       "contents": [
@@ -209,6 +209,7 @@
     "os": false
   },
   "devDependencies": {
+    "@craco/craco": "7.1.0",
     "@types/apollo-upload-client": "^17.0.0",
     "@types/lodash": "^4.17.14",
     "concurrently": "^7.6.0",
