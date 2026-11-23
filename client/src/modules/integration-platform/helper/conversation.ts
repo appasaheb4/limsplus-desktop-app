@@ -1,12 +1,12 @@
 import { decode } from './parser';
 
 export const mappingData = async (
-  segmentMapping: any,
+  messageFieldMapping: any,
   interfaceManager: any,
 ) => {
   const mapping: any[] = [];
   const values: any[] = [];
-  for (const item of segmentMapping) {
+  for (const item of messageFieldMapping) {
     if (item.instType === interfaceManager.instrumentType) {
       values.push({
         segments: item.segments,
@@ -35,12 +35,12 @@ export const mappingData = async (
 
 export const conversation = async (
   type: string,
-  segmentMapping: any,
+  messageFieldMapping: any,
   interfaceManager: any,
   message: string,
 ) => {
   try {
-    const mappingList = await mappingData(segmentMapping, interfaceManager);
+    const mappingList = await mappingData(messageFieldMapping, interfaceManager);
     const tempData: any = {};
     for (const item of mappingList) {
       for (const key of Object.keys(item)) {

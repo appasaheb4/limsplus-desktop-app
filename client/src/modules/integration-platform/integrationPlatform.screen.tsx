@@ -260,7 +260,7 @@ const IntegrationPlatform = observer(() => {
     event.target.value = '';
     if (!file) return;
 
-    if (communicationDetails.segmentMapping?.length === 0) {
+    if (communicationDetails.messageFieldMapping?.length === 0) {
       alert('Please select an instrument type first');
       return;
     }
@@ -269,7 +269,7 @@ const IntegrationPlatform = observer(() => {
       communicationDetails.interfaceManager?.length > 0
         ? communicationDetails.interfaceManager[0]
         : {};
-    const protocol = communicationDetails.segmentMapping[0]?.protocol;
+    const protocol = communicationDetails.messageFieldMapping[0]?.protocol;
 
     setLogUploadLoading(true);
 
@@ -284,7 +284,7 @@ const IntegrationPlatform = observer(() => {
           const message = buildConversationMessage(blocks[i], interfaceManager);
           const result = await conversation(
             protocol,
-            communicationDetails.segmentMapping,
+            communicationDetails.messageFieldMapping,
             interfaceManager,
             message,
           );
@@ -301,7 +301,7 @@ const IntegrationPlatform = observer(() => {
             blocks.length === 0
               ? 'No ASTM message blocks found. Expected .txt with segments like H|, P|, O|, R|.'
               : segments.length === 0
-                ? 'No decoded segments. Check instrument type / segment mapping matches this log.'
+                ? 'No decoded segments. Check instrument type / message field mapping matches this log.'
                 : undefined,
         });
         setLogPreviewOpen(true);

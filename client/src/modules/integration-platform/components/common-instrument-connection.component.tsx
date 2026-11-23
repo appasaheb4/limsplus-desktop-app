@@ -36,7 +36,7 @@ export const CommonInstrumentConnectionComponent = ({
           .post(`/communication/communicationDetails`, {
             filter: {
               condition: { instType },
-              fetchDetails: ['segmentMapping', 'interfaceManager'],
+              fetchDetails: ['messageFieldMapping', 'interfaceManager'],
             },
           })
           .then((response: any) => {

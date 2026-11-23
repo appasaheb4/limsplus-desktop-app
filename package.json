@@ -18,7 +18,8 @@
     "production:win": "yarn run build-react && yarn run bump-version-patch && yarn run bundle-lite-resources && yarn run build-server && yarn run dump-database && yarn run build:client:win",
     "production:mac": "yarn run build-react && yarn run bump-version-patch && yarn run bundle-lite-resources && yarn run build-server && yarn run dump-database && yarn run build:client:mac",
     "start:win": "yarn run build-react && yarn run build:win && cd client && yarn start",
-    "start:mac": "yarn run build-react && yarn run build:mac && cd client && yarn start"
+    "start:mac": "yarn run build-react && yarn run build:mac && cd client && yarn start",
+    "deploy": "node scripts/deploy.js"
   },
   "keywords": [],
   "author": "",
