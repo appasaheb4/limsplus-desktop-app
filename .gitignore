@@ -5,6 +5,7 @@
 /client/node_modules
 /client/build
 /client/dist
+/.deploy-artifacts
 /client/database/*
 /client/assets/install-identity.json
 /server/dist

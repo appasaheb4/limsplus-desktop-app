@@ -1,6 +1,6 @@
 {
   "name": "limsplus-desktop-app",
-  "version": "1.0.38",
+  "version": "1.0.46",
   "main": "client/main.js",
   "scripts": {
     "bump-version-patch": "node scripts/bump-root-version-patch.js",

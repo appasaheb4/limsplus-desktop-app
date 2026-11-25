@@ -7,6 +7,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { rewriteSymlinksInside } = require('./rewrite-bundle-symlinks');
 
 const root = path.join(__dirname, '..');
 const serviceRoot = path.resolve(
@@ -36,6 +37,16 @@ fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.mkdirSync(dest, { recursive: true });
 fs.cpSync(distSrc, dest, { recursive: true });
 fs.cpSync(nmSrc, path.join(dest, 'node_modules'), { recursive: true });
+
+const links = rewriteSymlinksInside(dest);
+console.log(
+  `copy-backend: symlinks rewritten=${links.rewritten} removed=${links.removed} unmapped=${links.unmapped.length}`,
+);
+if (links.unmapped.length) {
+  die(
+    `symlinks still point outside ${dest}:\n${links.unmapped.slice(0, 20).join('\n')}`,
+  );
+}
 
 console.log(
   `copy-backend: copied ${distSrc} + ${nmSrc}\n → ${dest}`,

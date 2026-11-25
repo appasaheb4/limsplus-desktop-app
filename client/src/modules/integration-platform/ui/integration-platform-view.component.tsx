@@ -18,13 +18,21 @@ export function IntegrationPlatformView() {
             <PlatformHeader model={model} />
             <InstrumentDetails model={model} />
             <div key={model.connected ? 'live' : 'setup'} className='ip-stage'>
-              {model.connected ? <SessionWorkspace model={model} /> : <ConnectionSetup model={model} />}
+              {model.connected ? (
+                <SessionWorkspace model={model} />
+              ) : (
+                <ConnectionSetup model={model} />
+              )}
             </div>
             <PlatformFooter model={model} />
           </div>
         </div>
       </div>
-      {model.toast ? <div className='ip-toast' role='status'>{model.toast}</div> : null}
+      {model.toast ? (
+        <div className='ip-toast' role='status'>
+          {model.toast}
+        </div>
+      ) : null}
     </div>
   );
 }

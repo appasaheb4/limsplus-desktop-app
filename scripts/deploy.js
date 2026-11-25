@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Builds the Electron app for Windows (.exe / NSIS) and macOS (.dmg)
- * in one run, then publishes the installers to a GitHub Release for
- * the current version. Signing is skipped when no certificate is present.
+ * Runs `yarn production:mac` and `yarn production:win`, then uploads only
+ * the .dmg and .exe those scripts just wrote. Nothing else is published.
+ * production:win reuses the version production:mac just saved so both
+ * installers match. The next deploy bumps again inside production:mac.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -12,6 +13,7 @@ const https = require('https');
 const ROOT = path.join(__dirname, '..');
 const CLIENT = path.join(ROOT, 'client');
 const DIST_DIR = path.join(CLIENT, 'dist');
+const STAGING_DIR = path.join(ROOT, '.deploy-artifacts');
 const REPO = 'appasaheb4/limsplus-desktop-app';
 
 function die(msg, code = 1) {
@@ -85,15 +87,13 @@ function headSha() {
   return String(result.stdout || '').trim();
 }
 
-function collectArtifacts(version) {
-  if (!fs.existsSync(DIST_DIR)) {
-    log(`build output directory not found: ${DIST_DIR}`);
+function collectArtifacts(version, dir) {
+  if (!fs.existsSync(dir)) {
+    log(`build output directory not found: ${dir}`);
     return [];
   }
-  const names = fs.readdirSync(DIST_DIR);
-  const selected = [];
-
-  const installers = names.filter((name) => {
+  const names = fs.readdirSync(dir);
+  const selected = names.filter((name) => {
     const lower = name.toLowerCase();
     return (
       name.includes(version) &&
@@ -101,33 +101,9 @@ function collectArtifacts(version) {
     );
   });
 
-  for (const name of installers) {
-    selected.push(name);
-    const blockmap = `${name}.blockmap`;
-    if (names.includes(blockmap) && !selected.includes(blockmap)) {
-      selected.push(blockmap);
-    }
-  }
-
-  for (const name of names) {
-    if (
-      name.includes(version) &&
-      name.toLowerCase().endsWith('.blockmap') &&
-      !selected.includes(name)
-    ) {
-      selected.push(name);
-    }
-  }
-
-  for (const name of names) {
-    if (/^latest.*\.ya?ml$/i.test(name) && !selected.includes(name)) {
-      selected.push(name);
-    }
-  }
-
   const paths = [];
   for (const name of selected) {
-    const filePath = path.join(DIST_DIR, name);
+    const filePath = path.join(dir, name);
     const st = fs.statSync(filePath);
     if (!st.isFile() || st.size === 0) {
       log(`skipping missing or empty artifact: ${filePath}`);
@@ -138,6 +114,21 @@ function collectArtifacts(version) {
   return paths;
 }
 
+/** electron:build-mac and electron:build-win each delete client/dist, so keep installers aside. */
+function stashInstallers() {
+  if (!fs.existsSync(DIST_DIR)) return;
+  fs.mkdirSync(STAGING_DIR, { recursive: true });
+  for (const name of fs.readdirSync(DIST_DIR)) {
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.dmg') && !lower.endsWith('.exe')) continue;
+    const from = path.join(DIST_DIR, name);
+    const to = path.join(STAGING_DIR, name);
+    fs.copyFileSync(from, to);
+    const size = fs.statSync(to).size;
+    log(`kept ${name} (${size} bytes) — same file production:mac / production:win writes`);
+  }
+}
+
 function releaseExistsGh(gh, tag) {
   const result = runCapture(gh, ['release', 'view', tag, '--repo', REPO]);
   return result.status === 0;
@@ -145,35 +136,26 @@ function releaseExistsGh(gh, tag) {
 
 function publishWithGh(gh, tag, files, title, notes, target) {
   if (releaseExistsGh(gh, tag)) {
-    log(`release ${tag} already exists; uploading artifacts with --clobber`);
-    const result = run(gh, [
-      'release',
-      'upload',
-      tag,
-      ...files,
-      '--repo',
-      REPO,
-      '--clobber',
-    ]);
-    if (result.status !== 0) die(`gh release upload failed (exit ${result.status})`);
-  } else {
-    log(`creating release ${tag} at ${target}`);
-    const result = run(gh, [
-      'release',
-      'create',
-      tag,
-      ...files,
-      '--repo',
-      REPO,
-      '--title',
-      title,
-      '--notes',
-      notes,
-      '--target',
-      target,
-    ]);
-    if (result.status !== 0) die(`gh release create failed (exit ${result.status})`);
+    die(
+      `release ${tag} already exists. Re-run yarn deploy so it publishes the next version.`,
+    );
   }
+  log(`creating release ${tag} at ${target}`);
+  const result = run(gh, [
+    'release',
+    'create',
+    tag,
+    ...files,
+    '--repo',
+    REPO,
+    '--title',
+    title,
+    '--notes',
+    notes,
+    '--target',
+    target,
+  ]);
+  if (result.status !== 0) die(`gh release create failed (exit ${result.status})`);
 }
 
 function getToken() {
@@ -267,7 +249,9 @@ async function publishWithApi(tag, files, title, notes, target) {
     release = created.json;
     log(`created release ${tag}`);
   } else {
-    log(`release ${tag} already exists; uploading artifacts (replacing if present)`);
+    die(
+      `release ${tag} already exists. Re-run yarn deploy so it publishes the next version.`,
+    );
   }
 
   const releaseId = release.id;
@@ -313,75 +297,52 @@ async function publish(tag, files, title, notes, target) {
   }
 }
 
-function runSharedPrep(env) {
+function runProductionInstallers() {
   const shell = yarnShell();
-  runOrDie('yarn', ['run', 'bundle-lite-resources'], { env, shell }, 'bundle-lite-resources');
-  runOrDie('yarn', ['run', 'build-server'], { env, shell }, 'build-server');
-  runOrDie('node', ['scripts/sync-lite-product-name.js'], { env }, 'sync-lite-product-name');
-  runOrDie('yarn', ['run', 'dump-database'], { env, shell }, 'dump-database');
-}
+  fs.rmSync(STAGING_DIR, { recursive: true, force: true });
+  fs.mkdirSync(STAGING_DIR, { recursive: true });
 
-function runClientCompile(env) {
-  const shell = yarnShell();
-  const clientOpts = { cwd: CLIENT, env, shell };
-  runOrDie('yarn', ['install'], clientOpts, 'client yarn install');
-  fs.rmSync(DIST_DIR, { recursive: true, force: true });
-  log('cleared client/dist');
-  runOrDie('yarn', ['build'], clientOpts, 'client yarn build');
-  const tsc = path.join(CLIENT, 'node_modules', 'typescript', 'bin', 'tsc');
-  runOrDie('node', [tsc, '-p', 'electron'], { cwd: CLIENT, env }, 'tsc -p electron');
-  runOrDie('yarn', ['build:server'], clientOpts, 'client build:server');
-  runOrDie(
-    'node',
-    [path.join(ROOT, 'scripts', 'sync-lite-product-name.js')],
-    { cwd: CLIENT, env },
-    'sync-lite-product-name (client)',
-  );
-  runOrDie(
-    'node',
-    [path.join(ROOT, 'scripts', 'write-install-identity.js')],
-    { cwd: CLIENT, env },
-    'write-install-identity',
-  );
-}
+  log('running yarn production:mac');
+  runOrDie('yarn', ['run', 'production:mac'], { cwd: ROOT, env: process.env, shell }, 'production:mac');
+  stashInstallers();
 
-function runElectronBuilder(env) {
-  log('running npx electron-builder --win --mac with CSC_IDENTITY_AUTO_DISCOVERY=false');
-  const result = run('npx', ['electron-builder', '--win', '--mac'], {
-    cwd: CLIENT,
-    env,
-    shell: yarnShell(),
-  });
-  if (result.status === 0 && !result.signal) return null;
-  const signal = result.signal ? `, signal ${result.signal}` : '';
-  return `electron-builder --win --mac failed (exit ${result.status}${signal})`;
+  log('running yarn production:win with the same version as the mac installer');
+  runOrDie(
+    'yarn',
+    ['run', 'production:win'],
+    {
+      cwd: ROOT,
+      env: { ...process.env, SKIP_VERSION_BUMP: '1' },
+      shell,
+    },
+    'production:win',
+  );
+  stashInstallers();
 }
 
 async function main() {
+  log('build with production:mac and production:win, then upload only those .dmg and .exe files');
+  runProductionInstallers();
+
   const version = readVersion();
   const tag = `v${version}`;
   const target = headSha();
   const title = tag;
-  const notes = `LIMSPLUS Connect ${tag} (Windows NSIS installer and macOS DMG).`;
-  const env = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+  const notes = [
+    `LIMSPLUS Connect ${tag} (Windows NSIS installer and macOS DMG).`,
+    '',
+    'macOS: if Gatekeeper says the app is damaged or from an unidentified developer, quit the installer, then run:',
+    `xattr -dr com.apple.quarantine "/Applications/LIMSPLUS Connect ${version}.app"`,
+    'A paid Apple Developer ID and notarization are required for a normal double-click open after download.',
+  ].join('\n');
 
-  log(`version ${version}, host ${process.platform}, target ${target}`);
-  log('building Windows .exe (nsis) and macOS .dmg in one run');
-
-  runSharedPrep(env);
-  runClientCompile(env);
-  const buildError = runElectronBuilder(env);
-  if (buildError) {
-    log(`${buildError}. Will upload any artifacts that were produced.`);
-  }
-
-  const files = collectArtifacts(version);
+  const files = collectArtifacts(version, STAGING_DIR);
   if (files.length === 0) {
-    const listing = fs.existsSync(DIST_DIR)
-      ? fs.readdirSync(DIST_DIR).join(', ') || '(empty)'
-      : '(missing client/dist)';
+    const listing = fs.existsSync(STAGING_DIR)
+      ? fs.readdirSync(STAGING_DIR).join(', ') || '(empty)'
+      : '(missing .deploy-artifacts)';
     die(
-      `${buildError ? `${buildError}; ` : ''}no .dmg or .exe artifact matching version ${version} found in ${DIST_DIR}. Files: ${listing}`,
+      `no .dmg or .exe artifact matching version ${version} found in ${STAGING_DIR}. Files: ${listing}`,
     );
   }
 
@@ -390,14 +351,19 @@ async function main() {
     log(`artifact ${path.basename(filePath)} (${st.size} bytes)`);
   }
 
+  const hasDmg = files.some((filePath) => filePath.toLowerCase().endsWith('.dmg'));
+  const hasExe = files.some((filePath) => filePath.toLowerCase().endsWith('.exe'));
+  if (!hasDmg || !hasExe) {
+    die(
+      `expected both a .dmg (production:mac) and a .exe (production:win) for ${version}. Found: ${files.map((filePath) => path.basename(filePath)).join(', ') || '(none)'}`,
+    );
+  }
+
   await publish(tag, files, title, notes, target);
 
   const releaseUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
-  if (buildError) {
-    log(`done with build errors. release: ${releaseUrl}`);
-    console.error(`deploy: ${buildError}`);
-    process.exit(1);
-  }
+  log(`uploaded the production:mac .dmg and production:win .exe for ${version}`);
+  log(`next yarn deploy starts by bumping ${version} inside production:mac`);
   log(`done. release: ${releaseUrl}`);
 }
 
