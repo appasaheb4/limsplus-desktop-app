@@ -1,5 +1,11 @@
-import { CommonInstrumentDetails } from '../integrationPlatform.screen';
 import { service } from '../../../core-services/rest-api';
+
+export interface CommonInstrumentDetails {
+  environmentList: string[];
+  departmentList: string[];
+  instTypeList: string[];
+  instIdList: string[];
+}
 
 interface CommonConnectionInputs {
   companyCode: string;

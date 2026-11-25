@@ -4,7 +4,7 @@ import {
   ServiceResponse,
 } from '../../../core-services/graphql/apollo-client';
 import { stores } from '../../../stores';
-import { FIND_BY_FIELDS } from './mutation';
+import { FIND_BY_FIELDS, INTERFACE_MANAGERS } from './mutation';
 
 export class IntegrationPlatformService {
   async fetchEnvironment(payload: any) {
@@ -52,6 +52,21 @@ export class IntegrationPlatformService {
       throw error;
     }
   }
+
+  listInterfaceManagers = (variables: any) =>
+    new Promise<any>((resolve, reject) => {
+      client
+        .mutate({
+          mutation: INTERFACE_MANAGERS,
+          variables,
+        })
+        .then((response: any) => {
+          resolve(response.data);
+        })
+        .catch((error) =>
+          reject(new ServiceResponse<any>(0, error.message, undefined)),
+        );
+    });
 
   findByFieldsInstrumentMaster = (variables: any) =>
     new Promise<any>((resolve, reject) => {

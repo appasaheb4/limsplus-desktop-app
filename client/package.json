@@ -1,6 +1,6 @@
 {
   "name": "limsplus-connect",
-  "version": "1.0.38",
+  "version": "1.0.46",
   "author": "Lakade Appasaheb",
   "description": "LimsPlus Connect",
   "homepage": ".",
@@ -64,10 +64,11 @@
   },
   "build": {
     "appId": "com.limsplus.connect",
-    "productName": "LIMSPLUS Connect 1.0.38",
+    "productName": "LIMSPLUS Connect 1.0.46",
     "copyright": "Copyright © 2026 LimsPlus",
     "publish": null,
     "extends": null,
+    "afterPack": "scripts/mac-adhoc-sign.js",
     "asarUnpack": [
       "**/node_modules/mongodb-memory-server/**/*",
       "**/node_modules/mongodb-memory-server-core/**/*"
@@ -121,6 +122,8 @@
       "buildResources": "assets"
     },
     "mac": {
+      "identity": null,
+      "gatekeeperAssess": false,
       "target": [
         "dmg",
         "pkg"
@@ -159,7 +162,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LIMSPLUS Connect 1.0.38",
+      "shortcutName": "LIMSPLUS Connect 1.0.46",
       "uninstallDisplayName": "${productName}",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
@@ -168,7 +171,7 @@
       "include": "installer/nsis/installer.nsh"
     },
     "dmg": {
-      "title": "LIMSPLUS Connect 1.0.38",
+      "title": "LIMSPLUS Connect 1.0.46",
       "icon": "assets/icon.icns",
       "artifactName": "${productName}.${ext}",
       "contents": [
