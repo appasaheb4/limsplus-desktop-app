@@ -25,6 +25,15 @@ export function uniqueText(values: Array<string | undefined | null>): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].sort();
 }
 
+/** Production when the loaded list has it, otherwise the first environment. */
+export function preferredEnvironment(environments: string[]): string {
+  return (
+    environments.find((item) => item.trim().toLowerCase() === 'production') ??
+    environments[0] ??
+    ''
+  );
+}
+
 export function recordsForEnvironment(
   records: InterfaceManagerRecord[],
   environment: string,

@@ -1,15 +1,12 @@
 import React from 'react';
 import { IntegrationPlatformStore } from '../modules/integration-platform/store/integrationPlatform.store';
-import { LoginStore } from '../modules/login/stores/login.store';
 export class Stores {
   private isLoading: boolean;
   integrationPlatformStore: IntegrationPlatformStore;
-  loginStore: LoginStore;
   localStoragePath: string = '';
   constructor() {
     this.isLoading = false;
     this.integrationPlatformStore = new IntegrationPlatformStore();
-    this.loginStore = new LoginStore();
   }
 
   loading() {

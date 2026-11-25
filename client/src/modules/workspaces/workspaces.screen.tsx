@@ -183,11 +183,11 @@ const LIMS_LITE_SETUP_STEPS = [
 ] as const;
 
 
-type HomeProps = {
+type WorkspacesProps = {
   activationProfile?: DesktopActivationProfile | null;
 };
 
-const Home = observer(({ activationProfile: activationProfileProp = null }: HomeProps) => {
+const Workspaces = observer(({ activationProfile: activationProfileProp = null }: WorkspacesProps) => {
   const { integrationPlatformStore } = useStores();
   const [isOpen, setIsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -253,7 +253,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         setActivationProfile(next);
         syncLocalLoginCompany(next);
       } catch (err: unknown) {
-        console.warn('[Home] get-activation-profile failed:', err);
+        console.warn('[Workspaces] get-activation-profile failed:', err);
       }
     };
     void loadActivationProfile();
@@ -274,7 +274,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         .fetchEnvironment({ code: user.companyCode })
         .catch((err: unknown) => {
           console.warn(
-            '[Home] fetchEnvironment failed (offline or REST unavailable)',
+            '[Workspaces] fetchEnvironment failed (offline or REST unavailable)',
             err,
           );
         });
@@ -341,6 +341,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
       const storedProfile = (await ipcRenderer.invoke(
         'get-activation-profile',
       )) as DesktopActivationProfile | null;
+      const accessToken = await ipcRenderer.invoke('read-access-token');
 
       const profile = hasActivationProfileContent(storedProfile)
         ? storedProfile
@@ -351,7 +352,8 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
         const result = (await service
           .post('/company/logoutDesktopApp', {
             filter: {
-              code: profile.code
+              code: profile.code,
+              accessToken,
             },
           })
           .then((response) => response.data)) as {
@@ -723,7 +725,7 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
                 </h1>
                 <p className='mt-1 text-sm text-gray-400'>
                   {companyLabel
-                    ? 'Your licensed company workspace on this device.'
+                    ? `Workspaces, reports, and local configuration for ${companyLabel}.`
                     : 'Workspaces, reports, and local configuration shortcuts.'}
                 </p>
                 <div className='mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3'>
@@ -1122,4 +1124,4 @@ const Home = observer(({ activationProfile: activationProfileProp = null }: Home
   );
 });
 
-export default Home;
+export default Workspaces;

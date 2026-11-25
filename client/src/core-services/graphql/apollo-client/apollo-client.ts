@@ -9,7 +9,6 @@ import { onError } from '@apollo/client/link/error';
 import { stores } from '../../../stores';
 import { setContext } from '@apollo/client/link/context';
 import { createUploadLink } from 'apollo-upload-client';
-import { IpcRendererEvent } from 'electron';
 import { getLimsLiteApiBase } from '../../../runtime/lims-lite-bootstrap';
 const { ipcRenderer } = window.require('electron');
 
@@ -59,19 +58,10 @@ const getGraphqlHttpUri = (env: string): string | undefined => {
 };
 
 const authLink = setContext(async (_, { headers }) => {
-  const accessToken = await new Promise<string>((resolve, reject) => {
-    ipcRenderer.invoke('read-access-token');
-    ipcRenderer.once(
-      'send-access-token',
-      (_event: IpcRendererEvent, token: string) => {
-        if (token) {
-          resolve(token);
-        } else {
-          reject(new Error('No access token stored — sign in again.'));
-        }
-      },
-    );
-  });
+  const accessToken = await ipcRenderer.invoke('read-access-token');
+  if (!accessToken) {
+    throw new Error('No access token stored — sign in again.');
+  }
   return {
     headers: {
       ...headers,
@@ -94,7 +84,7 @@ const authMiddleware = new ApolloLink((operation, forward) => {
 const liteApiBase = getLimsLiteApiBase();
 const graphqlUri = liteApiBase
   ? `${liteApiBase}/graphql`
-  : getGraphqlHttpUri(process.env.REACT_APP_ENV || 'Local') ?? '';
+  : (getGraphqlHttpUri(process.env.REACT_APP_ENV || 'Local') ?? '');
 
 if (
   process.env.NODE_ENV === 'development' &&

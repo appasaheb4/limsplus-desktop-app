@@ -63,9 +63,16 @@ export class IntegrationPlatformService {
         .then((response: any) => {
           resolve(response.data);
         })
-        .catch((error) =>
-          reject(new ServiceResponse<any>(0, error.message, undefined)),
-        );
+        .catch((error) => {
+          console.error('[interfaceManagers]', error);
+          reject(
+            new ServiceResponse<any>(
+              0,
+              error?.message || 'Interface manager request failed',
+              undefined,
+            ),
+          );
+        });
     });
 
   findByFieldsInstrumentMaster = (variables: any) =>

@@ -16,6 +16,7 @@ import {
   findInterfaceRecord,
   instrumentsForSelection,
   labsFor,
+  preferredEnvironment,
   uniqueText,
   type InterfaceManagerRecord,
 } from './interface-manager-selection';
@@ -83,7 +84,9 @@ export function useIntegrationPlatform() {
   const [soundOn, setSoundOn] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [stats, setStats] = useState<SessionStats>(SESSION_STATS);
-  const [interfaceRecords, setInterfaceRecords] = useState<InterfaceManagerRecord[]>([]);
+  const [interfaceRecords, setInterfaceRecords] = useState<
+    InterfaceManagerRecord[]
+  >([]);
   const interfaceService = useRef(new IntegrationPlatformService());
   const toastTimer = useRef<number | null>(null);
   const connectTimer = useRef<number | null>(null);
@@ -110,26 +113,45 @@ export function useIntegrationPlatform() {
     let active = true;
     const ipcRenderer = window.require('electron').ipcRenderer as {
       invoke: (channel: string) => Promise<unknown>;
-      on: (channel: string, listener: (_event: unknown, user: { companyCode?: string; environment?: string }) => void) => void;
-      removeListener: (channel: string, listener: (_event: unknown, user: { companyCode?: string; environment?: string }) => void) => void;
+      on: (
+        channel: string,
+        listener: (
+          _event: unknown,
+          user: { companyCode?: string; environment?: string },
+        ) => void,
+      ) => void;
+      removeListener: (
+        channel: string,
+        listener: (
+          _event: unknown,
+          user: { companyCode?: string; environment?: string },
+        ) => void,
+      ) => void;
     };
-    const onUser = (_event: unknown, user: { companyCode?: string; environment?: string }) => {
+    const onUser = (
+      _event: unknown,
+      user: { companyCode?: string; environment?: string },
+    ) => {
       if (!active) return;
-      const companyCode = String(user?.companyCode || getReactAppLocalLoginCompany() || '').trim();
+      const companyCode = String(
+        user?.companyCode || getReactAppLocalLoginCompany() || '',
+      ).trim();
       if (!companyCode) return;
-      setSlots((current) => current.map((slot) => ({
-        ...slot,
-        settings: {
-          ...slot.settings,
-          companyCode,
-          environment: slot.settings.environment || String(user?.environment || ''),
-        },
-      })));
+      setSlots((current) =>
+        current.map((slot) => ({
+          ...slot,
+          settings: {
+            ...slot.settings,
+            companyCode,
+          },
+        })),
+      );
       interfaceService.current
         .listInterfaceManagers({ input: { page: 1, limit: 1000 } })
         .then((response) => {
           if (!active) return;
-          const rows = (response?.interfaceManagers?.data || []) as InterfaceManagerRecord[];
+          const rows = (response?.interfaceManagers?.data ||
+            []) as InterfaceManagerRecord[];
           const scoped = rows.filter(
             (row) => !row.companyCode || row.companyCode === companyCode,
           );
@@ -149,64 +171,111 @@ export function useIntegrationPlatform() {
 
   useEffect(() => {
     if (!interfaceRecords.length) return;
-    const known = new Set(uniqueText(interfaceRecords.map((record) => record.environment)));
-    setSlots((current) => current.map((slot) => {
-      if (!slot.settings.environment || known.has(slot.settings.environment)) return slot;
-      return {
-        ...slot,
-        settings: clearSelection(slot.settings, { environment: '', lab: '', department: '' }),
-        named: false,
-        title: `Option ${slot.index}`,
-      };
-    }));
+    const environments = uniqueText(
+      interfaceRecords.map((record) => record.environment),
+    );
+    const preferred = preferredEnvironment(environments);
+    setSlots((current) =>
+      current.map((slot) => {
+        const currentEnv = slot.settings.environment;
+        const known = Boolean(currentEnv) && environments.includes(currentEnv);
+        const untouched =
+          !slot.settings.lab &&
+          !slot.settings.department &&
+          !slot.settings.instrumentId;
+        if (known && (!untouched || currentEnv === preferred)) return slot;
+        if (untouched) {
+          if (!preferred || currentEnv === preferred) return slot;
+          return {
+            ...slot,
+            settings: { ...slot.settings, environment: preferred },
+          };
+        }
+        if (known) return slot;
+        return {
+          ...slot,
+          named: false,
+          title: `Option ${slot.index}`,
+          settings: clearSelection(slot.settings, {
+            environment: preferred,
+            lab: '',
+            department: '',
+          }),
+        };
+      }),
+    );
   }, [interfaceRecords]);
 
   const activeSlot = slots.find((slot) => slot.id === activeSlotId) ?? slots[0];
   const settings = activeSlot.settings;
   const connected = activeSlot.connected;
 
-  const updateActive = useCallback((recipe: (slot: InstrumentSlot) => InstrumentSlot) => {
-    setSlots((current) => current.map((slot) => (
-      slot.id === activeSlotId ? recipe(slot) : slot
-    )));
-  }, [activeSlotId]);
+  const updateActive = useCallback(
+    (recipe: (slot: InstrumentSlot) => InstrumentSlot) => {
+      setSlots((current) =>
+        current.map((slot) => (slot.id === activeSlotId ? recipe(slot) : slot)),
+      );
+    },
+    [activeSlotId],
+  );
 
-  const nameWithInstrument = (slot: InstrumentSlot, next: PlatformSettings): InstrumentSlot => ({
+  const nameWithInstrument = (
+    slot: InstrumentSlot,
+    next: PlatformSettings,
+  ): InstrumentSlot => ({
     ...slot,
     settings: next,
     named: Boolean(next.instrumentId),
     title: next.instrumentId || `Option ${slot.index}`,
   });
 
-  const patch = useCallback((partial: Partial<PlatformSettings>) => {
-    updateActive((slot) => ({
-      ...slot,
-      settings: { ...slot.settings, ...partial },
-    }));
-  }, [updateActive]);
+  const patch = useCallback(
+    (partial: Partial<PlatformSettings>) => {
+      updateActive((slot) => ({
+        ...slot,
+        settings: { ...slot.settings, ...partial },
+      }));
+    },
+    [updateActive],
+  );
 
   const setEnvironment = (environment: string) => {
-    updateActive((slot) => nameWithInstrument(slot, clearSelection(slot.settings, {
-      environment,
-      lab: '',
-      department: '',
-    })));
+    updateActive((slot) =>
+      nameWithInstrument(
+        slot,
+        clearSelection(slot.settings, {
+          environment,
+          lab: '',
+          department: '',
+        }),
+      ),
+    );
   };
 
   const setLab = (lab: string) => {
-    updateActive((slot) => nameWithInstrument(slot, clearSelection(slot.settings, {
-      environment: slot.settings.environment,
-      lab,
-      department: '',
-    })));
+    updateActive((slot) =>
+      nameWithInstrument(
+        slot,
+        clearSelection(slot.settings, {
+          environment: slot.settings.environment,
+          lab,
+          department: '',
+        }),
+      ),
+    );
   };
 
   const setDepartment = (department: string) => {
-    updateActive((slot) => nameWithInstrument(slot, clearSelection(slot.settings, {
-      environment: slot.settings.environment,
-      lab: slot.settings.lab,
-      department,
-    })));
+    updateActive((slot) =>
+      nameWithInstrument(
+        slot,
+        clearSelection(slot.settings, {
+          environment: slot.settings.environment,
+          lab: slot.settings.lab,
+          department,
+        }),
+      ),
+    );
   };
 
   const setInstrument = (instrumentId: string) => {
@@ -220,32 +289,48 @@ export function useIntegrationPlatform() {
       const next = match
         ? applyInterfaceRecord(slot.settings, match)
         : clearSelection(slot.settings, {
-          environment: slot.settings.environment,
-          lab: slot.settings.lab,
-          department: slot.settings.department,
-        });
+            environment: slot.settings.environment,
+            lab: slot.settings.lab,
+            department: slot.settings.department,
+          });
       return nameWithInstrument(slot, { ...next, instrumentId });
     });
   };
 
-  const environments = uniqueText(interfaceRecords.map((record) => record.environment));
+  const environments = uniqueText(
+    interfaceRecords.map((record) => record.environment),
+  );
+
+  // console.log({ environments });
+
   const labs = labsFor(interfaceRecords, settings.environment);
-  const departments = departmentsFor(interfaceRecords, settings.environment, settings.lab);
+  const departments = departmentsFor(
+    interfaceRecords,
+    settings.environment,
+    settings.lab,
+  );
   const instrumentOptions = instrumentsForSelection(
     interfaceRecords,
     settings.environment,
     settings.lab,
     settings.department,
   );
-  const protocol = PROTOCOLS.find((item) => item.id === settings.protocol)?.title ?? 'ASTM';
-  const flow = FLOW_MODES.find((item) => item.id === settings.flow)?.title ?? 'Bi-directional';
+  const protocol =
+    PROTOCOLS.find((item) => item.id === settings.protocol)?.title ?? 'ASTM';
+  const flow =
+    FLOW_MODES.find((item) => item.id === settings.flow)?.title ??
+    'Bi-directional';
 
   const filtered = useMemo(() => filterLogs(logs, query), [logs, query]);
   const pageData = paginate(filtered, page, pageSize);
-  const selectedLog = logs.find((row) => row.id === selectedLogId) ?? filtered[0];
+  const selectedLog =
+    logs.find((row) => row.id === selectedLogId) ?? filtered[0];
   const activeFrameId = selectedLog?.frameId ?? selectedFrameId;
-  const frame = MOCK_FRAMES.find((item) => item.id === (view === 'frame' ? selectedFrameId : activeFrameId))
-    ?? MOCK_FRAMES[0];
+  const frame =
+    MOCK_FRAMES.find(
+      (item) =>
+        item.id === (view === 'frame' ? selectedFrameId : activeFrameId),
+    ) ?? MOCK_FRAMES[0];
 
   const openView = (next: WorkspaceView) => {
     setView(next);
@@ -267,9 +352,11 @@ export function useIntegrationPlatform() {
     setConnecting(true);
     connectTimer.current = window.setTimeout(() => {
       setConnecting(false);
-      setSlots((current) => current.map((slot) => (
-        slot.id === slotId ? { ...slot, connected: true } : slot
-      )));
+      setSlots((current) =>
+        current.map((slot) =>
+          slot.id === slotId ? { ...slot, connected: true } : slot,
+        ),
+      );
       setView('all');
       setStats(SESSION_STATS);
       setLogs(MOCK_LOGS);
@@ -285,10 +372,19 @@ export function useIntegrationPlatform() {
   };
 
   const reset = () => {
+    const environment = preferredEnvironment(
+      uniqueText(interfaceRecords.map((record) => record.environment)),
+    );
     updateActive((slot) => ({
       ...slot,
-      settings: cloneSettings(INITIAL_SETTINGS),
-      title: slot.named ? INITIAL_SETTINGS.instrumentId : `Option ${slot.index}`,
+      settings: {
+        ...cloneSettings(INITIAL_SETTINGS),
+        companyCode: slot.settings.companyCode,
+        environment,
+      },
+      title: slot.named
+        ? INITIAL_SETTINGS.instrumentId
+        : `Option ${slot.index}`,
     }));
     setSendMode('auto');
     notify('Settings reset');
@@ -303,7 +399,11 @@ export function useIntegrationPlatform() {
 
   const addSlot = () => {
     const index = slots.reduce((max, slot) => Math.max(max, slot.index), 0) + 1;
+    const environment = preferredEnvironment(
+      uniqueText(interfaceRecords.map((record) => record.environment)),
+    );
     const slot = createSlot(index);
+    if (environment) slot.settings.environment = environment;
     setSlots((current) => [...current, slot]);
     setActiveSlotId(slot.id);
     notify(`Option ${index} added`);
@@ -316,7 +416,14 @@ export function useIntegrationPlatform() {
 
   const clearLog = () => {
     setLogs([]);
-    setStats({ received: 0, sent: 0, ack: 0, warnings: 0, errors: 0, lastActivity: '—' });
+    setStats({
+      received: 0,
+      sent: 0,
+      ack: 0,
+      warnings: 0,
+      errors: 0,
+      lastActivity: '—',
+    });
     notify('Communication log cleared');
   };
 
@@ -347,7 +454,10 @@ export function useIntegrationPlatform() {
   };
 
   const exportLogs = (format: 'csv' | 'json') => {
-    const body = format === 'csv' ? logsToCsv(filtered) : JSON.stringify(filtered, null, 2);
+    const body =
+      format === 'csv'
+        ? logsToCsv(filtered)
+        : JSON.stringify(filtered, null, 2);
     downloadText(
       `limsplus-connect-log.${format}`,
       body,
@@ -358,7 +468,9 @@ export function useIntegrationPlatform() {
   };
 
   const copyFrame = async () => {
-    const ok = await copyText(frame.records.map((record) => record.raw).join('\n'));
+    const ok = await copyText(
+      frame.records.map((record) => record.raw).join('\n'),
+    );
     notify(ok ? 'Frame copied' : 'Could not copy the frame');
   };
 
@@ -371,7 +483,10 @@ export function useIntegrationPlatform() {
   };
 
   const downloadFrame = () => {
-    downloadText(`frame-${frame.number}.txt`, frame.records.map((record) => record.raw).join('\r\n'));
+    downloadText(
+      `frame-${frame.number}.txt`,
+      frame.records.map((record) => record.raw).join('\r\n'),
+    );
     notify('Frame downloaded');
   };
 
@@ -437,4 +552,6 @@ export function useIntegrationPlatform() {
   };
 }
 
-export type IntegrationPlatformModel = ReturnType<typeof useIntegrationPlatform>;
+export type IntegrationPlatformModel = ReturnType<
+  typeof useIntegrationPlatform
+>;

@@ -1,6 +1,6 @@
 // Legacy route table — runtime entry uses App.tsx (activation gate → dashboard).
 import App from './App';
-import Home from './modules/home/home.screen';
+import Workspaces from './modules/workspaces/workspaces.screen';
 import IntegrationPlatform from './modules/integration-platform/integrationPlatform.screen';
 
 const routes = [
@@ -10,11 +10,11 @@ const routes = [
     children: [
       {
         index: true,
-        element: <Home />,
+        element: <Workspaces />,
       },
       {
         path: '/dashboard',
-        element: <Home />,
+        element: <Workspaces />,
       },
       {
         path: '/integration-platform',

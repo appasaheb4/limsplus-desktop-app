@@ -69,8 +69,9 @@ export default function ActivationKeyGate({ onActivated }: Props) {
             },
           })
           .then((response) => response.data)) as {
-          success?: boolean;
+          success?: boolean | number;
           message?: string;
+          accessToken?: string;
           company?: Record<string, unknown>;
         };
 
@@ -112,6 +113,9 @@ export default function ActivationKeyGate({ onActivated }: Props) {
         }
         if (companyCode) {
           setLocalLoginCompanyCode(companyCode);
+        }
+        if (result.accessToken) {
+          await ipcRenderer.invoke('accessToken', result.accessToken);
         }
         return {
           ok: true,

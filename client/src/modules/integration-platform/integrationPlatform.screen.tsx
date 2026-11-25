@@ -6,6 +6,7 @@ const IntegrationPlatform = () => {
     try {
       const { ipcRenderer } = window.require('electron');
       ipcRenderer.send('set-title', 'INTEGRATION PLATFORM');
+      ipcRenderer.send('open-devtools');
     } catch {
       /* Browser preview has no Electron bridge. */
     }

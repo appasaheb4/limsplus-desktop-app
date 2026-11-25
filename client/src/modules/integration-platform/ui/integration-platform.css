@@ -503,6 +503,12 @@ body:has(.ip-app) #root > div {
   padding-right: 16px;
 }
 
+.ip-control select:disabled {
+  cursor: default;
+  color: var(--text);
+  opacity: 1;
+}
+
 .ip-control .ip-chevron {
   position: absolute;
   right: 10px;

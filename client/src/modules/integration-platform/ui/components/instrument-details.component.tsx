@@ -68,7 +68,13 @@ export function InstrumentDetails({ model }: { model: IntegrationPlatformModel }
           />
         </Field>
         <Field label='Instrument type'>
-          <TextInput icon='beaker' value={settings.instrumentType} readOnly />
+          <SelectInput
+            icon='beaker'
+            readOnly
+            value={settings.instrumentType}
+            onChange={() => undefined}
+            options={withSelect(settings.instrumentType ? [settings.instrumentType] : [])}
+          />
         </Field>
         <Field label='Company code'>
           <TextInput icon='building' value={settings.companyCode} readOnly />

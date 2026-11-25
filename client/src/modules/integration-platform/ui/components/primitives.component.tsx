@@ -57,16 +57,24 @@ export function SelectInput({
   onChange,
   options,
   icon,
+  readOnly,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
   icon?: IconName;
+  readOnly?: boolean;
 }) {
   return (
     <div className='ip-control'>
       {icon ? <Icon name={icon} size={14} /> : null}
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        value={value}
+        disabled={readOnly}
+        onChange={(event) => {
+          if (!readOnly) onChange(event.target.value);
+        }}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

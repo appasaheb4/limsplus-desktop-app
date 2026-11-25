@@ -18,7 +18,7 @@
 // let isExists = fs.existsSync(FILE_PATH);
 // if (isExists) {
 //   mainWindow.loadFile(
-//     path.join(__dirname, 'src/modules/home', 'home.screen.html')
+//     path.join(__dirname, 'src/modules/workspaces', 'workspaces.screen.html')
 //   );
 // } else {
 //   mainWindow.loadFile(

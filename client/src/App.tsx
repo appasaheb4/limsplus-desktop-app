@@ -4,7 +4,7 @@ import {
   Route,
   Navigate,
 } from 'react-router-dom';
-import Home from './modules/home/home.screen';
+import Workspaces from './modules/workspaces/workspaces.screen';
 import IntegrationPlatform from './modules/integration-platform/integrationPlatform.screen';
 import ActivationKeyGate from './modules/license-activation/activation-key-gate.component';
 
@@ -34,7 +34,7 @@ function DashboardWithWelcome({ activationProfile }: DashboardWithWelcomeProps) 
       {/* <header className='w-full border-b border-neutral-200 bg-neutral-100 px-4 py-3 text-base font-semibold text-neutral-900'>
         {companyName ? `Welcome ${companyName}` : 'Welcome'}
       </header> */}
-      <Home activationProfile={activationProfile} />
+      <Workspaces activationProfile={activationProfile} />
     </div>
   );
 }

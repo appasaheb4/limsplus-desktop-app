@@ -651,10 +651,19 @@ function startIntegrationPlatformPythonServer(): void {
   });
 }
 
+function openInspect(contents: Electron.WebContents | undefined): void {
+  if (!contents || contents.isDestroyed()) return;
+  if (!contents.isDevToolsOpened()) {
+    contents.openDevTools({ mode: 'detach' });
+  }
+  contents.devToolsWebContents?.focus();
+}
+
 function openIntegrationPlatformWindow(route: string): void {
   if (childWindows && !childWindows.isDestroyed()) {
     childWindows.show();
     childWindows.focus();
+    openInspect(childWindows.webContents);
     return;
   }
 
@@ -705,6 +714,7 @@ function openIntegrationPlatformWindow(route: string): void {
     childWindows.maximize();
     childWindows.show();
     childWindows.focus();
+    openInspect(childWindows.webContents);
   });
 
   startIntegrationPlatformPythonServer();
@@ -1502,11 +1512,8 @@ ipcMain.handle('accessToken', async (sender, payload) => {
   store.set('accessToken', payload);
 });
 
-ipcMain.handle('read-access-token', (event) => {
-  let token = store.get('accessToken');
-  if (token) {
-    event.sender.send('send-access-token', token);
-  }
+ipcMain.handle('read-access-token', () => {
+  return store.get('accessToken') || '';
 });
 
 ipcMain.handle('user', async (sender, payload) => {
@@ -1581,6 +1588,10 @@ ipcMain.handle('open-file', async (event, filePath) => {
   } else {
     return false;
   }
+});
+
+ipcMain.on('open-devtools', (event) => {
+  openInspect(event.sender);
 });
 
 ipcMain.on('set-title', (event, title) => {
@@ -1762,6 +1773,7 @@ ipcMain.handle('clear-license-activation', (event) => {
   store.set('licenseActivated', false);
   store.set('activationProfile', null);
   store.set('localLoginCompany', '');
+  store.set('accessToken', '');
   broadcastActivationProfileUpdated(event.sender, null);
   broadcastLicenseActivationCleared(event.sender);
   return { ok: true };
