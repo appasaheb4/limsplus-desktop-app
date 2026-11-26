@@ -20,21 +20,49 @@ export function InstrumentSidebar({ model }: { model: IntegrationPlatformModel }
         {model.slots.map((slot) => {
           const active = slot.id === model.activeSlotId;
           return (
-            <button
+            <div
               key={slot.id}
-              type='button'
+              role='button'
+              tabIndex={0}
               className={cx('ip-slot', active && 'is-on')}
               title={slot.title}
               aria-current={active ? 'page' : undefined}
               onClick={() => model.selectSlot(slot.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  model.selectSlot(slot.id);
+                }
+              }}
             >
-              <span className={cx('ip-slot-mark', slot.named && 'is-named')}>{slot.index}</span>
+              <span className={cx('ip-slot-mark', slot.named && 'is-named', slot.saved && 'has-lock')}>
+                {slot.index}
+                {slot.saved ? (
+                  <button
+                    type='button'
+                    className={cx('ip-slot-lock', !slot.locked && 'is-open')}
+                    title={slot.locked ? 'Unlock session' : 'Unlocked for editing'}
+                    aria-label={
+                      slot.locked
+                        ? `Unlock instrument ${slot.index}`
+                        : `Instrument ${slot.index} is unlocked`
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      model.selectSlot(slot.id);
+                      if (slot.locked) model.unlock(slot.id);
+                    }}
+                  >
+                    <Icon name={slot.locked ? 'lock' : 'unlock'} size={10} />
+                  </button>
+                ) : null}
+              </span>
               <span className='ip-slot-copy' key={slot.title}>
                 <b>{slot.title}</b>
                 <small>{slot.named ? slot.settings.instrumentType : 'Choose an instrument'}</small>
               </span>
               {slot.connected ? <i className='ip-dot is-live' /> : null}
-            </button>
+            </div>
           );
         })}
       </nav>

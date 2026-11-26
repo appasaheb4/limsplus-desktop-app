@@ -62,6 +62,20 @@ export function departmentsFor(
   );
 }
 
+export function instrumentTypesFor(
+  records: InterfaceManagerRecord[],
+  environment: string,
+  lab: string,
+  department: string,
+): string[] {
+  if (!lab || !department) return [];
+  return uniqueText(
+    recordsForEnvironment(records, environment)
+      .filter((record) => record.lab === lab && record.department === department)
+      .map((record) => record.instType),
+  );
+}
+
 export function instrumentsForSelection(
   records: InterfaceManagerRecord[],
   environment: string,
@@ -122,6 +136,13 @@ function asObject(value: unknown): Record<string, unknown> {
 function text(value: unknown, fallback = ''): string {
   if (value == null || value === '') return fallback;
   return String(value);
+}
+
+export function protocolIdFromRecord(
+  record: InterfaceManagerRecord | undefined,
+): ProtocolId | null {
+  if (!record?.communicationProtocol) return null;
+  return mapProtocol(record.communicationProtocol);
 }
 
 function mapProtocol(value: string): ProtocolId {

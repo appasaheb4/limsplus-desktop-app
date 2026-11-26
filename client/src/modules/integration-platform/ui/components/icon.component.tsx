@@ -36,7 +36,9 @@ export type IconName =
   | 'grid'
   | 'file'
   | 'alert'
-  | 'plus';
+  | 'plus'
+  | 'lock'
+  | 'unlock';
 
 const PATHS: Record<IconName, string> = {
   beaker: 'M9 3h6M10 3v5L5.5 18A3 3 0 0 0 8.2 22h7.6a3 3 0 0 0 2.7-4L14 8V3',
@@ -75,6 +77,8 @@ const PATHS: Record<IconName, string> = {
   file: 'M7 3h7l5 5v13H7V3zM14 3v6h6',
   alert: 'M12 9v4M12 17h.01M10.3 4.8 2.8 18a2 2 0 0 0 1.7 3h14.9a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0z',
   plus: 'M12 5v14M5 12h14',
+  lock: 'M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z',
+  unlock: 'M8 11V8a4 4 0 0 1 7.4-2M6 11h12v9H6z',
 };
 
 export function Icon({

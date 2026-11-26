@@ -16,12 +16,16 @@ export function IntegrationPlatformView() {
         <div className='ip-main'>
           <div className='ip-scroll' key={model.activeSlotId}>
             <PlatformHeader model={model} />
-            <InstrumentDetails model={model} />
+            <fieldset className='ip-session' disabled={model.sessionLocked}>
+              <InstrumentDetails model={model} />
+            </fieldset>
             <div key={model.connected ? 'live' : 'setup'} className='ip-stage'>
               {model.connected ? (
                 <SessionWorkspace model={model} />
               ) : (
-                <ConnectionSetup model={model} />
+                <fieldset className='ip-session' disabled={model.sessionLocked}>
+                  <ConnectionSetup model={model} />
+                </fieldset>
               )}
             </div>
             <PlatformFooter model={model} />

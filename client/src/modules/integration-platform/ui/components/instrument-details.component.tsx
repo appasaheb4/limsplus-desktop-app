@@ -4,7 +4,11 @@ import { Icon, type IconName } from './icon.component';
 import { Field, SelectInput, TextInput } from './primitives.component';
 import { cx } from '../integration-platform.helpers';
 
-export function InstrumentDetails({ model }: { model: IntegrationPlatformModel }) {
+export function InstrumentDetails({
+  model,
+}: {
+  model: IntegrationPlatformModel;
+}) {
   const { settings } = model;
   return (
     <section className='ip-card'>
@@ -59,23 +63,24 @@ export function InstrumentDetails({ model }: { model: IntegrationPlatformModel }
             options={withSelect(model.departments)}
           />
         </Field>
-        <Field label='Instrument ID'>
-          <SelectInput
-            icon='hash'
-            value={settings.instrumentId}
-            onChange={model.setInstrument}
-            options={withSelect(model.instrumentOptions.map((item) => item.id))}
-          />
-        </Field>
         <Field label='Instrument type'>
           <SelectInput
             icon='beaker'
-            readOnly
             value={settings.instrumentType}
-            onChange={() => undefined}
-            options={withSelect(settings.instrumentType ? [settings.instrumentType] : [])}
+            onChange={model.setInstrumentType}
+            options={withSelect(model.instrumentTypes)}
           />
         </Field>
+        <Field label='Instrument ID'>
+          <SelectInput
+            icon='hash'
+            readOnly
+            value={settings.instrumentId}
+            onChange={() => undefined}
+            options={withSelect(model.instrumentOptions.map((item) => item.id))}
+          />
+        </Field>
+
         <Field label='Company code'>
           <TextInput icon='building' value={settings.companyCode} readOnly />
         </Field>
@@ -93,23 +98,33 @@ export function InstrumentDetails({ model }: { model: IntegrationPlatformModel }
         <span className='ip-label'>Communication protocol</span>
       </div>
       <div className='ip-protocol-row'>
-        {PROTOCOLS.map((protocol) => (
-          <ProtocolChoice
-            key={protocol.id}
-            icon={protocol.icon}
-            title={protocol.title}
-            detail={protocol.detail}
-            active={settings.protocol === protocol.id}
-            onClick={() => model.patch({ protocol: protocol.id })}
-          />
-        ))}
+        {PROTOCOLS.map((protocol) => {
+          const locked = model.lockedProtocol;
+          const disabled = Boolean(locked) && protocol.id !== locked;
+          return (
+            <ProtocolChoice
+              key={protocol.id}
+              icon={protocol.icon}
+              title={protocol.title}
+              detail={protocol.detail}
+              active={settings.protocol === protocol.id}
+              disabled={disabled}
+              onClick={() => {
+                if (!disabled) model.patch({ protocol: protocol.id });
+              }}
+            />
+          );
+        })}
       </div>
     </section>
   );
 }
 
 function withSelect(values: string[]) {
-  return [{ value: '', label: 'Select' }, ...values.map((value) => ({ value, label: value }))];
+  return [
+    { value: '', label: 'Select' },
+    ...values.map((value) => ({ value, label: value })),
+  ];
 }
 
 function ProtocolChoice({
@@ -117,16 +132,23 @@ function ProtocolChoice({
   title,
   detail,
   active,
+  disabled,
   onClick,
 }: {
   icon: IconName;
   title: string;
   detail: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type='button' className={cx('ip-choice', active && 'is-on')} onClick={onClick}>
+    <button
+      type='button'
+      className={cx('ip-choice', active && 'is-on')}
+      disabled={disabled}
+      onClick={onClick}
+    >
       <span className='ip-choice-icon'>
         <Icon name={icon} size={15} />
       </span>

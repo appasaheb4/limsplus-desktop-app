@@ -179,7 +179,13 @@ export function Pagination({
         Showing {from} to {to} of {total} records
       </span>
       <div className='ip-pager-pages'>
-        <button type='button' className='ip-page-btn' onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label='Previous page'>
+        <button
+          type='button'
+          className='ip-page-btn'
+          onClick={() => onPage(page - 1)}
+          disabled={page <= 1}
+          aria-label='Previous page'
+        >
           ‹
         </button>
         {buttons.map((item, index) =>
@@ -196,14 +202,23 @@ export function Pagination({
             </button>
           ),
         )}
-        <button type='button' className='ip-page-btn' onClick={() => onPage(page + 1)} disabled={page >= pages} aria-label='Next page'>
+        <button
+          type='button'
+          className='ip-page-btn'
+          onClick={() => onPage(page + 1)}
+          disabled={page >= pages}
+          aria-label='Next page'
+        >
           ›
         </button>
         <div className='ip-page-size'>
           <SelectInput
             value={String(pageSize)}
             onChange={(value) => onPageSize(Number(value))}
-            options={pageSizes.map((size) => ({ value: String(size), label: `${size} / page` }))}
+            options={pageSizes.map((size) => ({
+              value: String(size),
+              label: `${size} / page`,
+            }))}
           />
         </div>
       </div>

@@ -14,8 +14,10 @@ import {
   clearSelection,
   departmentsFor,
   findInterfaceRecord,
+  instrumentTypesFor,
   instrumentsForSelection,
   labsFor,
+  protocolIdFromRecord,
   preferredEnvironment,
   uniqueText,
   type InterfaceManagerRecord,
@@ -52,14 +54,111 @@ function createSlot(index: number): InstrumentSlot {
   return {
     id: `slot-${index}`,
     index,
-    title: `Option ${index}`,
+    title: `Instrument ${index}`,
     named: false,
     connected: false,
+    saved: false,
+    locked: false,
     settings: cloneSettings(INITIAL_SETTINGS),
   };
 }
 
-const START_SLOTS = [createSlot(1), createSlot(2), createSlot(3)];
+const SESSION_STORAGE_KEY = 'limsplus.integration-platform.sessions';
+
+interface StoredSession {
+  id: string;
+  index: number;
+  title: string;
+  named: boolean;
+  settings: PlatformSettings;
+}
+
+function formReady(settings: PlatformSettings) {
+  return Boolean(
+    settings.environment.trim() &&
+      settings.lab.trim() &&
+      settings.department.trim() &&
+      settings.instrumentType.trim() &&
+      settings.instrumentId.trim(),
+  );
+}
+
+function readStoredSessions(): StoredSession[] {
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const row = item as Partial<StoredSession>;
+      if (
+        typeof row.index !== 'number' ||
+        !row.settings ||
+        typeof row.settings !== 'object'
+      ) {
+        return [];
+      }
+      return [
+        {
+          id: row.id || `slot-${row.index}`,
+          index: row.index,
+          title: row.title || `Instrument ${row.index}`,
+          named: Boolean(row.named),
+          settings: cloneSettings({
+            ...INITIAL_SETTINGS,
+            ...row.settings,
+            tcp: { ...INITIAL_SETTINGS.tcp, ...row.settings.tcp },
+            serial: { ...INITIAL_SETTINGS.serial, ...row.settings.serial },
+            timeout: { ...INITIAL_SETTINGS.timeout, ...row.settings.timeout },
+          }),
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function slotsFromStorage(): InstrumentSlot[] {
+  const stored = readStoredSessions();
+  const byIndex = new Map(stored.map((item) => [item.index, item]));
+  const highest = stored.reduce((max, item) => Math.max(max, item.index), 3);
+  const next: InstrumentSlot[] = [];
+  for (let index = 1; index <= highest; index += 1) {
+    const saved = byIndex.get(index);
+    if (!saved) {
+      next.push(createSlot(index));
+      continue;
+    }
+    next.push({
+      id: saved.id,
+      index,
+      title: saved.settings.instrumentId || saved.title,
+      named: Boolean(saved.settings.instrumentId),
+      connected: false,
+      saved: true,
+      locked: true,
+      settings: cloneSettings(saved.settings),
+    });
+  }
+  return next;
+}
+
+function persistSessions(slots: InstrumentSlot[]) {
+  const payload: StoredSession[] = slots
+    .filter((slot) => slot.saved)
+    .map((slot) => ({
+      id: slot.id,
+      index: slot.index,
+      title: slot.title,
+      named: slot.named,
+      settings: cloneSettings(slot.settings),
+    }));
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+}
+
+const START_SLOTS = slotsFromStorage();
 
 export function useIntegrationPlatform() {
   const [slots, setSlots] = useState<InstrumentSlot[]>(START_SLOTS);
@@ -192,10 +291,11 @@ export function useIntegrationPlatform() {
           };
         }
         if (known) return slot;
+        if (slot.saved) return slot;
         return {
           ...slot,
           named: false,
-          title: `Option ${slot.index}`,
+          title: `Instrument ${slot.index}`,
           settings: clearSelection(slot.settings, {
             environment: preferred,
             lab: '',
@@ -213,7 +313,10 @@ export function useIntegrationPlatform() {
   const updateActive = useCallback(
     (recipe: (slot: InstrumentSlot) => InstrumentSlot) => {
       setSlots((current) =>
-        current.map((slot) => (slot.id === activeSlotId ? recipe(slot) : slot)),
+        current.map((slot) => {
+          if (slot.id !== activeSlotId || slot.locked) return slot;
+          return recipe(slot);
+        }),
       );
     },
     [activeSlotId],
@@ -226,7 +329,7 @@ export function useIntegrationPlatform() {
     ...slot,
     settings: next,
     named: Boolean(next.instrumentId),
-    title: next.instrumentId || `Option ${slot.index}`,
+    title: next.instrumentId || `Instrument ${slot.index}`,
   });
 
   const patch = useCallback(
@@ -297,6 +400,36 @@ export function useIntegrationPlatform() {
     });
   };
 
+  const setInstrumentType = (instrumentType: string) => {
+    updateActive((slot) => {
+      const cleared = clearSelection(slot.settings, {
+        environment: slot.settings.environment,
+        lab: slot.settings.lab,
+        department: slot.settings.department,
+      });
+      if (!instrumentType) return nameWithInstrument(slot, cleared);
+      const matches = instrumentsForSelection(
+        interfaceRecords,
+        slot.settings.environment,
+        slot.settings.lab,
+        slot.settings.department,
+      ).filter((item) => item.type === instrumentType);
+      if (matches.length !== 1) {
+        return nameWithInstrument(slot, { ...cleared, instrumentType });
+      }
+      const match = findInterfaceRecord(interfaceRecords, {
+        environment: slot.settings.environment,
+        lab: slot.settings.lab,
+        department: slot.settings.department,
+        instrumentId: matches[0].id,
+      });
+      const next = match
+        ? applyInterfaceRecord(slot.settings, match)
+        : { ...cleared, instrumentId: matches[0].id };
+      return nameWithInstrument(slot, { ...next, instrumentType, instrumentId: matches[0].id });
+    });
+  };
+
   const environments = uniqueText(
     interfaceRecords.map((record) => record.environment),
   );
@@ -309,11 +442,22 @@ export function useIntegrationPlatform() {
     settings.environment,
     settings.lab,
   );
+  const instrumentTypes = instrumentTypesFor(
+    interfaceRecords,
+    settings.environment,
+    settings.lab,
+    settings.department,
+  );
   const instrumentOptions = instrumentsForSelection(
     interfaceRecords,
     settings.environment,
     settings.lab,
     settings.department,
+  ).filter((item) => !settings.instrumentType || item.type === settings.instrumentType);
+  const lockedProtocol = protocolIdFromRecord(
+    settings.instrumentId
+      ? findInterfaceRecord(interfaceRecords, settings)
+      : undefined,
   );
   const protocol =
     PROTOCOLS.find((item) => item.id === settings.protocol)?.title ?? 'ASTM';
@@ -367,11 +511,16 @@ export function useIntegrationPlatform() {
   const disconnect = () => {
     if (connectTimer.current) window.clearTimeout(connectTimer.current);
     setConnecting(false);
-    updateActive((slot) => ({ ...slot, connected: false }));
+    setSlots((current) =>
+      current.map((slot) =>
+        slot.id === activeSlotId ? { ...slot, connected: false } : slot,
+      ),
+    );
     notify('Instrument disconnected');
   };
 
   const reset = () => {
+    if (activeSlot.saved || activeSlot.locked) return;
     const environment = preferredEnvironment(
       uniqueText(interfaceRecords.map((record) => record.environment)),
     );
@@ -384,7 +533,7 @@ export function useIntegrationPlatform() {
       },
       title: slot.named
         ? INITIAL_SETTINGS.instrumentId
-        : `Option ${slot.index}`,
+        : `Instrument ${slot.index}`,
     }));
     setSendMode('auto');
     notify('Settings reset');
@@ -406,12 +555,35 @@ export function useIntegrationPlatform() {
     if (environment) slot.settings.environment = environment;
     setSlots((current) => [...current, slot]);
     setActiveSlotId(slot.id);
-    notify(`Option ${index} added`);
+    notify(`Instrument ${index} added`);
   };
 
   const save = () => {
-    updateActive((slot) => nameWithInstrument(slot, slot.settings));
+    if (activeSlot.locked || !formReady(settings)) return;
+    setSlots((current) => {
+      const next = current.map((slot) =>
+        slot.id === activeSlotId
+          ? {
+              ...nameWithInstrument(slot, slot.settings),
+              saved: true,
+              locked: true,
+            }
+          : slot,
+      );
+      persistSessions(next);
+      return next;
+    });
     notify('Settings saved');
+  };
+
+  const unlock = (id: string) => {
+    setActiveSlotId(id);
+    setSlots((current) =>
+      current.map((slot) =>
+        slot.id === id && slot.saved ? { ...slot, locked: false } : slot,
+      ),
+    );
+    notify('Session unlocked');
   };
 
   const clearLog = () => {
@@ -507,17 +679,24 @@ export function useIntegrationPlatform() {
     departments,
     environments,
     instrumentOptions,
+    instrumentTypes,
+    lockedProtocol,
+    formReady: formReady(settings),
+    sessionSaved: activeSlot.saved,
+    sessionLocked: activeSlot.locked,
     patch,
     setEnvironment,
     setLab,
     setDepartment,
     setInstrument,
+    setInstrumentType,
     connected,
     connecting,
     connect,
     disconnect,
     reset,
     save,
+    unlock,
     view,
     openView,
     sendMode,

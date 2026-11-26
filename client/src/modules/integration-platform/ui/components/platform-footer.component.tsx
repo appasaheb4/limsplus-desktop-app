@@ -3,6 +3,8 @@ import { Icon } from './icon.component';
 
 export function PlatformFooter({ model }: { model: IntegrationPlatformModel }) {
   const { settings } = model;
+  const editingSaved = model.sessionSaved && !model.sessionLocked;
+  const actionsDisabled = !model.formReady || model.sessionLocked;
   const note = model.connected
     ? `Connected to ${settings.instrumentType} (${settings.instrumentId}). Results are reviewed here before they are sent to the LIMSPLUS result table.`
     : 'Review the settings, then click Connect. LIMS will connect to the instrument and start listening for messages.';
@@ -10,10 +12,22 @@ export function PlatformFooter({ model }: { model: IntegrationPlatformModel }) {
     <footer className='ip-footer'>
       <p>{note}</p>
       <div className='ip-footer-actions'>
-        <button type='button' className='ip-btn' onClick={model.reset}>
-          <Icon name='reset' size={14} /> Reset
-        </button>
-        <button type='button' className='ip-btn' onClick={model.save}>
+        {editingSaved ? null : (
+          <button
+            type='button'
+            className='ip-btn'
+            onClick={model.reset}
+            disabled={actionsDisabled}
+          >
+            <Icon name='reset' size={14} /> Reset
+          </button>
+        )}
+        <button
+          type='button'
+          className='ip-btn'
+          onClick={model.save}
+          disabled={actionsDisabled}
+        >
           <Icon name='save' size={14} /> Save settings
         </button>
         {model.connected ? (

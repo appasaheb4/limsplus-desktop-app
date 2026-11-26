@@ -33,6 +33,8 @@ export interface InstrumentSlot {
   title: string;
   named: boolean;
   connected: boolean;
+  saved: boolean;
+  locked: boolean;
   settings: PlatformSettings;
 }
 
