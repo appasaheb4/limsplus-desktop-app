@@ -28,8 +28,8 @@ export function IntegrationPlatformView() {
                 </fieldset>
               )}
             </div>
-            <PlatformFooter model={model} />
           </div>
+          <PlatformFooter model={model} />
         </div>
       </div>
       {model.toast ? (

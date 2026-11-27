@@ -94,28 +94,32 @@ export function InstrumentDetails({
         </Field>
       </div>
 
-      <div className='ip-field' style={{ marginTop: 12 }}>
-        <span className='ip-label'>Communication protocol</span>
-      </div>
-      <div className='ip-protocol-row'>
-        {PROTOCOLS.map((protocol) => {
-          const locked = model.lockedProtocol;
-          const disabled = Boolean(locked) && protocol.id !== locked;
-          return (
-            <ProtocolChoice
-              key={protocol.id}
-              icon={protocol.icon}
-              title={protocol.title}
-              detail={protocol.detail}
-              active={settings.protocol === protocol.id}
-              disabled={disabled}
-              onClick={() => {
-                if (!disabled) model.patch({ protocol: protocol.id });
-              }}
-            />
-          );
-        })}
-      </div>
+      {model.connected ? null : (
+        <>
+          <div className='ip-field' style={{ marginTop: 12 }}>
+            <span className='ip-label'>Communication protocol</span>
+          </div>
+          <div className='ip-protocol-row'>
+            {PROTOCOLS.map((protocol) => {
+              const locked = model.lockedProtocol;
+              const disabled = Boolean(locked) && protocol.id !== locked;
+              return (
+                <ProtocolChoice
+                  key={protocol.id}
+                  icon={protocol.icon}
+                  title={protocol.title}
+                  detail={protocol.detail}
+                  active={settings.protocol === protocol.id}
+                  disabled={disabled}
+                  onClick={() => {
+                    if (!disabled) model.patch({ protocol: protocol.id });
+                  }}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
     </section>
   );
 }
